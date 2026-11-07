@@ -38,10 +38,6 @@ export default function LedgerView({
     return liquidAccounts.reduce((sum, a) => sum + (Number(a.balance) || 0), 0);
   }, [liquidAccounts]);
 
-  const defaultAccount = useMemo(() => {
-    return accounts.find((a) => a.isDefault) || accounts[0] || { name: 'Punjab National Bank', shortName: 'PNB' };
-  }, [accounts]);
-
   // Category color lookup
   const categoryMap = useMemo(() => {
     const map = new Map();
@@ -113,7 +109,7 @@ export default function LedgerView({
   // Filter transactions for this timeframe and criteria
   const filteredTransactions = useMemo(() => {
     return transactions.filter((tx) => {
-      const txDateStr = toIsoDate(tx.date);
+      const txDateStr = toIsoDate(tx.date, tx.updatedAt);
       if (txDateStr < startDateStr || txDateStr > endDateStr) return false;
       if (sphereFilter !== 'all' && tx.sphere !== sphereFilter) return false;
       if (searchQuery.trim()) {
@@ -167,14 +163,14 @@ export default function LedgerView({
   const groupedByDate = useMemo(() => {
     const groups = {};
     const sorted = [...filteredTransactions].sort((a, b) => {
-      const aDate = toIsoDate(a.date);
-      const bDate = toIsoDate(b.date);
+      const aDate = toIsoDate(a.date, a.updatedAt);
+      const bDate = toIsoDate(b.date, b.updatedAt);
       if (aDate !== bDate) return bDate.localeCompare(aDate);
       return (b.updatedAt || '').localeCompare(a.updatedAt || '');
     });
 
     sorted.forEach((tx) => {
-      const cleanKey = toIsoDate(tx.date);
+      const cleanKey = toIsoDate(tx.date, tx.updatedAt);
       if (!groups[cleanKey]) {
         groups[cleanKey] = [];
       }
@@ -220,7 +216,7 @@ export default function LedgerView({
   return (
     <div className="space-y-4 pb-20 sm:pb-8">
       {/* ─── Total Available Balance Card ─── */}
-      <div className="bg-[#0d111a] border border-gray-800 rounded-3xl p-5 shadow-sm space-y-3">
+      <div className="bg-[#0d111a] border border-gray-800 rounded-3xl p-5 shadow-sm space-y-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -228,11 +224,11 @@ export default function LedgerView({
           </div>
           <button
             onClick={onOpenAdjustBalances}
-            className="flex items-center gap-1.5 py-1.5 px-3 rounded-xl text-xs font-medium bg-gray-850 hover:bg-gray-800 text-gray-300 hover:text-white border border-gray-750 transition-all"
-            title="Adjust balances to match real bank accounts"
+            className="p-2 rounded-xl bg-gray-850 hover:bg-gray-800 text-gray-300 hover:text-white border border-gray-750 transition-all shadow-sm active:scale-95"
+            title="Shuffle / Adjust Balances"
+            aria-label="Adjust Balances"
           >
-            <SlidersHorizontal className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Shuffle / Adjust</span>
+            <SlidersHorizontal className="w-4 h-4 text-emerald-400" />
           </button>
         </div>
 
@@ -240,11 +236,6 @@ export default function LedgerView({
           <p className="text-3xl sm:text-4xl font-extrabold font-mono text-white tracking-tight">
             ₹{totalLiquidBalance.toLocaleString('en-IN')}
           </p>
-          <div className="flex items-center gap-2 mt-1.5 text-xs text-gray-400">
-            <span className="text-emerald-400 font-medium">● {liquidAccounts.length} Liquid Accounts</span>
-            <span>•</span>
-            <span>Default: <b className="text-white font-medium">{defaultAccount?.name || 'PNB'}</b></span>
-          </div>
         </div>
       </div>
 

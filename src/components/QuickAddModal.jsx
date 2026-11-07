@@ -5,19 +5,34 @@ import CategoryIcon from './CategoryIcon';
 import { X, Check, User, Briefcase, PlusCircle, MinusCircle } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 
+// Contextual smart default bank account based on user preferences:
+// 1. Work-related expense -> Punjab National Bank ('pnb')
+// 2. Personal / Daily Life expense -> Kerala Gramin Bank ('kgb')
+// 3. Incoming cash / Inflow -> South Indian Bank ('sib')
+const getContextualAccount = (curType, curSphere) => {
+  if (curType === 'income') return 'sib';
+  if (curSphere === 'work') return 'pnb';
+  return 'kgb';
+};
+
 export default function QuickAddModal({
   isOpen,
   onClose,
-  initialSphere = 'personal',
+  initialSphere = 'work',
   editTransaction = null,
   accounts = []
 }) {
   const accountsList = accounts.length > 0 ? accounts : DEFAULT_ACCOUNTS;
-  const defaultAcc = accountsList.find((a) => a.isDefault) || accountsList[0] || { id: 'pnb' };
 
   const [sphere, setSphere] = useState(() => editTransaction?.sphere || initialSphere);
   const [type, setType] = useState(() => editTransaction?.type || 'expense');
-  const [account, setAccount] = useState(() => editTransaction?.account || defaultAcc.id);
+  const [hasManualAccount, setHasManualAccount] = useState(() => Boolean(editTransaction?.account));
+  const [account, setAccount] = useState(() => {
+    if (editTransaction?.account) return editTransaction.account;
+    const initialT = editTransaction?.type || 'expense';
+    const initialS = editTransaction?.sphere || initialSphere;
+    return getContextualAccount(initialT, initialS);
+  });
   const [amount, setAmount] = useState(() => (editTransaction ? String(editTransaction.amount) : ''));
   const [date, setDate] = useState(() => editTransaction?.date || new Date().toISOString().split('T')[0]);
   const [category, setCategory] = useState(() => editTransaction?.category || '');
@@ -40,7 +55,28 @@ export default function QuickAddModal({
   const yesterdayStr = yesterday.toISOString().split('T')[0];
 
   const effectiveCategory = category || (filteredCategories.length > 0 ? filteredCategories[0].name : '');
-  const activeAccountId = account || defaultAcc.id;
+  const activeAccountId = account || getContextualAccount(type, sphere);
+
+  const handleSphereChange = (newSphere) => {
+    setSphere(newSphere);
+    setCategory('');
+    if (!hasManualAccount) {
+      setAccount(getContextualAccount(type, newSphere));
+    }
+  };
+
+  const handleTypeChange = (newType) => {
+    setType(newType);
+    setCategory('');
+    if (!hasManualAccount) {
+      setAccount(getContextualAccount(newType, sphere));
+    }
+  };
+
+  const handleSelectAccount = (accId) => {
+    setAccount(accId);
+    setHasManualAccount(true);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -137,10 +173,7 @@ export default function QuickAddModal({
             <div className="grid grid-cols-2 gap-2 p-1 bg-gray-850 rounded-xl">
               <button
                 type="button"
-                onClick={() => {
-                  setSphere('personal');
-                  setCategory('');
-                }}
+                onClick={() => handleSphereChange('personal')}
                 className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold transition-all ${
                   sphere === 'personal'
                     ? 'bg-gray-700 text-emerald-400 shadow-sm'
@@ -152,10 +185,7 @@ export default function QuickAddModal({
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setSphere('work');
-                  setCategory('');
-                }}
+                onClick={() => handleSphereChange('work')}
                 className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold transition-all ${
                   sphere === 'work'
                     ? 'bg-gray-700 text-blue-400 shadow-sm'
@@ -172,10 +202,7 @@ export default function QuickAddModal({
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
-              onClick={() => {
-                setType('expense');
-                setCategory('');
-              }}
+              onClick={() => handleTypeChange('expense')}
               className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold border transition-all ${
                 type === 'expense'
                   ? 'bg-rose-500/10 text-rose-400 border-rose-500/30'
@@ -187,10 +214,7 @@ export default function QuickAddModal({
             </button>
             <button
               type="button"
-              onClick={() => {
-                setType('income');
-                setCategory('');
-              }}
+              onClick={() => handleTypeChange('income')}
               className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold border transition-all ${
                 type === 'income'
                   ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
@@ -238,7 +262,7 @@ export default function QuickAddModal({
                   <button
                     key={acc.id}
                     type="button"
-                    onClick={() => setAccount(acc.id)}
+                    onClick={() => handleSelectAccount(acc.id)}
                     className={`py-1.5 px-2.5 rounded-xl text-xs font-medium border transition-all ${
                       isSelected
                         ? 'bg-gray-800 text-white border-emerald-500 shadow-sm'

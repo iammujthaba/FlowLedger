@@ -117,7 +117,7 @@ export default function App() {
           key={editingTransaction ? editingTransaction.id : 'new'}
           isOpen={isAddOpen}
           onClose={handleCloseAdd}
-          initialSphere="personal"
+          initialSphere="work"
           editTransaction={editingTransaction}
           accounts={accounts}
         />

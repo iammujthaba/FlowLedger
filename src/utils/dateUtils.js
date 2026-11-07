@@ -5,10 +5,20 @@
 
 export function parseAnyDate(val) {
   if (!val) return null;
-  if (val instanceof Date && !isNaN(val.getTime())) return val;
+  if (val instanceof Date) {
+    return isNaN(val.getTime()) ? null : val;
+  }
 
   const str = String(val).trim();
-  if (!str) return null;
+  if (
+    !str ||
+    str.toLowerCase() === 'invalid date' ||
+    str.toLowerCase() === 'nan' ||
+    str.toLowerCase() === 'undefined' ||
+    str.toLowerCase() === 'null'
+  ) {
+    return null;
+  }
 
   // 1. Check YYYY-MM-DD or YYYY/MM/DD
   const ymd = str.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
@@ -17,7 +27,7 @@ export function parseAnyDate(val) {
     if (!isNaN(d.getTime())) return d;
   }
 
-  // 2. Check DD-MM-YYYY or DD/MM/YYYY
+  // 2. Check DD-MM-YYYY or DD/MM/YYYY or DD.MM.YYYY
   const dmy = str.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/);
   if (dmy) {
     const d = new Date(parseInt(dmy[3], 10), parseInt(dmy[2], 10) - 1, parseInt(dmy[1], 10));
@@ -31,9 +41,14 @@ export function parseAnyDate(val) {
   return null;
 }
 
-export function toIsoDate(val) {
-  const d = parseAnyDate(val);
-  if (!d) return String(val || '');
+export function toIsoDate(val, fallbackVal = '') {
+  let d = parseAnyDate(val);
+  if (!d && fallbackVal) {
+    d = parseAnyDate(fallbackVal);
+  }
+  if (!d) {
+    d = new Date();
+  }
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
@@ -43,7 +58,7 @@ export function toIsoDate(val) {
 export function formatDateHeader(dateStr) {
   const d = parseAnyDate(dateStr);
   if (!d) {
-    return dateStr || 'Date';
+    return 'Recent';
   }
 
   const now = new Date();
@@ -70,3 +85,4 @@ export function formatDateHeader(dateStr) {
     year: 'numeric',
   })}`;
 }
+
