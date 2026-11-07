@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { db } from '../db/db';
 import { syncService } from '../services/syncService';
 import CategoryIcon from './CategoryIcon';
+import { toIsoDate, formatDateHeader } from '../utils/dateUtils';
 import {
   ChevronLeft,
   ChevronRight,
@@ -92,8 +93,7 @@ export default function LedgerView({ transactions = [], categories = [], onEditT
   // Filter transactions for this timeframe and criteria
   const filteredTransactions = useMemo(() => {
     return transactions.filter((tx) => {
-      // Normalize date comparison by taking first 10 characters (YYYY-MM-DD)
-      const txDateStr = String(tx.date || '').split('T')[0];
+      const txDateStr = toIsoDate(tx.date);
       if (txDateStr < startDateStr || txDateStr > endDateStr) return false;
       if (sphereFilter !== 'all' && tx.sphere !== sphereFilter) return false;
       if (searchQuery.trim()) {
@@ -147,14 +147,14 @@ export default function LedgerView({ transactions = [], categories = [], onEditT
   const groupedByDate = useMemo(() => {
     const groups = {};
     const sorted = [...filteredTransactions].sort((a, b) => {
-      const aDate = String(a.date || '').split('T')[0];
-      const bDate = String(b.date || '').split('T')[0];
+      const aDate = toIsoDate(a.date);
+      const bDate = toIsoDate(b.date);
       if (aDate !== bDate) return bDate.localeCompare(aDate);
       return (b.updatedAt || '').localeCompare(a.updatedAt || '');
     });
 
     sorted.forEach((tx) => {
-      const cleanKey = String(tx.date || '').split('T')[0];
+      const cleanKey = toIsoDate(tx.date);
       if (!groups[cleanKey]) {
         groups[cleanKey] = [];
       }
@@ -176,41 +176,6 @@ export default function LedgerView({ transactions = [], categories = [], onEditT
     } catch (err) {
       console.error('Delete failed:', err);
     }
-  };
-
-  const formatDateHeader = (dateStr) => {
-    if (!dateStr) return 'No Date';
-    const cleanStr = String(dateStr).split('T')[0];
-    const parts = cleanStr.split('-');
-    
-    let d;
-    if (parts.length === 3) {
-      d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
-    } else {
-      d = new Date(dateStr);
-    }
-
-    if (isNaN(d.getTime())) {
-      return String(dateStr);
-    }
-
-    const today = new Date();
-    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-    
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
-
-    let prefix = '';
-    if (cleanStr === todayStr) prefix = 'Today • ';
-    else if (cleanStr === yesterdayStr) prefix = 'Yesterday • ';
-
-    return `${prefix}${d.toLocaleDateString('en-IN', {
-      weekday: 'short',
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    })}`;
   };
 
   return (

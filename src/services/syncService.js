@@ -1,4 +1,5 @@
 import { db } from '../db/db';
+import { toIsoDate } from '../utils/dateUtils';
 
 class SyncService {
   constructor() {
@@ -125,6 +126,7 @@ class SyncService {
             } else {
               await db.transactions.put({
                 ...tx,
+                date: toIsoDate(tx.date),
                 amount: Number(tx.amount),
                 syncStatus: 'synced',
               });
