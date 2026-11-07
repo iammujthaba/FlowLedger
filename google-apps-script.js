@@ -101,6 +101,9 @@ function ensureSheets(ss) {
     let sheet = ss.getSheetByName(def.name);
     if (!sheet) {
       sheet = ss.insertSheet(def.name);
+    }
+    // If the sheet is empty or headers were deleted, automatically restore them
+    if (sheet.getLastRow() === 0 || sheet.getLastColumn() === 0) {
       sheet.appendRow(def.headers);
       sheet.getRange(1, 1, 1, def.headers.length).setFontWeight('bold').setBackground('#f3f4f6');
       sheet.setFrozenRows(1);
