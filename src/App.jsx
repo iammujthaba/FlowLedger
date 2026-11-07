@@ -14,7 +14,6 @@ import SettingsModal from './components/SettingsModal';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('ledger'); // 'ledger' | 'loans' | 'vault' | 'insights'
-  const [activeSphere, setActiveSphere] = useState('personal'); // 'personal' | 'work'
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState(null);
@@ -25,23 +24,10 @@ export default function App() {
     lastSyncTime: localStorage.getItem('flowledger_last_sync') || null,
   });
 
-  // Dark/Light theme state
-  const [isDark, setIsDark] = useState(() => {
-    const saved = localStorage.getItem('flowledger_theme');
-    if (saved) return saved === 'dark';
-    return window.matchMedia('(prefers-color-scheme: dark)').matches;
-  });
-
-  // Apply dark mode class to html document
+  // Permanently lock Dark Mode
   useEffect(() => {
-    if (isDark) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('flowledger_theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('flowledger_theme', 'light');
-    }
-  }, [isDark]);
+    document.documentElement.classList.add('dark');
+  }, []);
 
   // Initialize IndexedDB & subscribe to sync
   useEffect(() => {
@@ -83,14 +69,10 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[#080a0f] text-gray-900 dark:text-gray-100 transition-colors duration-200">
+    <div className="min-h-screen bg-[#080a0f] text-gray-100">
       <div className="max-w-2xl mx-auto px-4 py-5 sm:py-8">
         {/* Header */}
         <Header
-          activeSphere={activeSphere}
-          setActiveSphere={setActiveSphere}
-          isDark={isDark}
-          setIsDark={setIsDark}
           syncInfo={syncInfo}
           onTriggerSync={handleTriggerSync}
           onOpenSettings={() => setIsSettingsOpen(true)}
@@ -129,18 +111,20 @@ export default function App() {
           key={editingTransaction ? editingTransaction.id : 'new'}
           isOpen={isAddOpen}
           onClose={handleCloseAdd}
-          initialSphere={activeSphere}
+          initialSphere="personal"
           editTransaction={editingTransaction}
         />
       )}
 
       {/* Settings Modal */}
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        syncInfo={syncInfo}
-        onTriggerSync={handleTriggerSync}
-      />
+      {isSettingsOpen && (
+        <SettingsModal
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+          syncInfo={syncInfo}
+          onTriggerSync={handleTriggerSync}
+        />
+      )}
     </div>
   );
 }
