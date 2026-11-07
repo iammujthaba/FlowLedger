@@ -1,4 +1,5 @@
 import Dexie from 'dexie';
+import { syncService } from '../services/syncService';
 
 export const db = new Dexie('FlowLedgerDB');
 
@@ -8,6 +9,11 @@ db.version(1).stores({
   vault: 'key, updatedAt',
   syncQueue: '++id, entity, entityId, action, createdAt',
   categories: 'id, sphere, type, name',
+});
+
+db.version(2).stores({
+  transactions: 'id, date, sphere, type, category, amount, account, relatedLoanId, updatedAt, syncStatus',
+  loans: 'id, personName, type, amount, remainingAmount, account, date, dueDate, status, updatedAt, syncStatus',
 });
 
 // Default accounts configuration
@@ -48,12 +54,55 @@ export const DEFAULT_CATEGORIES = [
   { id: 'cat_investment', sphere: 'personal', type: 'income', name: 'Trading / Investment Profits', icon: 'TrendingUp', color: '#8b5cf6' },
   { id: 'cat_cashback', sphere: 'personal', type: 'income', name: 'Cashback & Rewards', icon: 'Gift', color: '#f59e0b' },
   { id: 'cat_other_inc', sphere: 'personal', type: 'income', name: 'Other Income', icon: 'PlusCircle', color: '#10b981' },
+
+  // Informal Loans & IOUs Categories
+  { id: 'cat_iou_lent', sphere: 'personal', type: 'expense', name: 'Money Lent (IOU)', icon: 'ArrowUpRight', color: '#a855f7' },
+  { id: 'cat_iou_borrowed', sphere: 'personal', type: 'income', name: 'Money Borrowed (IOU)', icon: 'ArrowDownLeft', color: '#ec4899' },
+  { id: 'cat_iou_repay_in', sphere: 'personal', type: 'income', name: 'IOU Repayment Received', icon: 'CheckCircle2', color: '#10b981' },
+  { id: 'cat_iou_repay_out', sphere: 'personal', type: 'expense', name: 'IOU Debt Repaid', icon: 'CheckCircle2', color: '#f59e0b' },
 ];
 
+export async function adjustAccountBalance(accountId, delta) {
+  const now = new Date().toISOString();
+  const accountsVault = await db.vault.get('bank_accounts');
+  const currentList = accountsVault && Array.isArray(accountsVault.value)
+    ? accountsVault.value
+    : DEFAULT_ACCOUNTS;
+
+  const targetId = accountId || 'pnb';
+  const updatedAccs = currentList.map((acc) => {
+    if (acc.id === targetId) {
+      return { ...acc, balance: (Number(acc.balance) || 0) + delta };
+    }
+    return acc;
+  });
+
+  await db.vault.put({ key: 'bank_accounts', value: updatedAccs, updatedAt: now });
+
+  try {
+    await syncService.enqueue('vault', 'bank_accounts', 'upsert', {
+      key: 'bank_accounts',
+      value: updatedAccs,
+      updatedAt: now,
+    });
+  } catch (err) {
+    console.error('Failed to enqueue vault sync on balance adjust:', err);
+  }
+
+  return updatedAccs;
+}
+
 export async function initializeDatabase() {
-  const catCount = await db.categories.count();
-  if (catCount === 0) {
+  const existingCats = await db.categories.toArray();
+  if (existingCats.length === 0) {
     await db.categories.bulkAdd(DEFAULT_CATEGORIES);
+  } else {
+    // Add any missing default categories (e.g. newly added IOU categories)
+    const existingIds = new Set(existingCats.map((c) => c.id));
+    const missing = DEFAULT_CATEGORIES.filter((c) => !existingIds.has(c.id));
+    if (missing.length > 0) {
+      await db.categories.bulkAdd(missing);
+    }
   }
 
   // Initialize bank accounts if not present

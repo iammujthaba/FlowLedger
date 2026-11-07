@@ -85,11 +85,11 @@ function ensureSheets(ss) {
   const sheets = [
     {
       name: 'Transactions',
-      headers: ['id', 'date', 'sphere', 'type', 'category', 'amount', 'note', 'updatedAt', 'isDeleted']
+      headers: ['id', 'date', 'sphere', 'type', 'category', 'amount', 'account', 'relatedLoanId', 'note', 'updatedAt', 'isDeleted']
     },
     {
       name: 'Loans',
-      headers: ['id', 'personName', 'type', 'amount', 'remainingAmount', 'date', 'dueDate', 'status', 'notes', 'updatedAt', 'isDeleted']
+      headers: ['id', 'personName', 'type', 'amount', 'remainingAmount', 'account', 'date', 'dueDate', 'status', 'notes', 'updatedAt', 'isDeleted']
     },
     {
       name: 'Vault',

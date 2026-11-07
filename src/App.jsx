@@ -101,7 +101,7 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'loans' && <LoansView loans={loans} />}
+          {activeTab === 'loans' && <LoansView loans={loans} accounts={accounts} />}
 
           {activeTab === 'vault' && <VaultCommitmentsView vault={vault} />}
 

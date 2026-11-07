@@ -45,6 +45,13 @@ export default function LedgerView({
     return map;
   }, [categories]);
 
+  // Account map for bank tags
+  const accountMap = useMemo(() => {
+    const map = new Map();
+    accounts.forEach((a) => map.set(a.id, a));
+    return map;
+  }, [accounts]);
+
   // Navigate timeframes
   const handlePrev = () => {
     setCurrentDate((prev) => {
@@ -181,7 +188,12 @@ export default function LedgerView({
   }, [filteredTransactions]);
 
   const handleDelete = async (tx) => {
-    if (!window.confirm(`Delete "${tx.category}" (₹${tx.amount})?`)) return;
+    const isLoanTx = Boolean(tx.relatedLoanId);
+    const confirmMsg = isLoanTx
+      ? `Delete "${tx.category}" (₹${tx.amount})? This will also revert the bank balance and update related IOU records.`
+      : `Delete "${tx.category}" (₹${tx.amount})?`;
+
+    if (!window.confirm(confirmMsg)) return;
     try {
       await db.transactions.delete(tx.id);
 
@@ -208,6 +220,16 @@ export default function LedgerView({
         isDeleted: true,
         updatedAt: new Date().toISOString(),
       });
+
+      // If this was the main loan transaction, also delete the loan
+      if (tx.relatedLoanId && tx.id === `tx_loan_${tx.relatedLoanId}`) {
+        await db.loans.delete(tx.relatedLoanId);
+        await syncService.enqueue('loans', tx.relatedLoanId, 'delete', {
+          id: tx.relatedLoanId,
+          isDeleted: true,
+          updatedAt: new Date().toISOString(),
+        });
+      }
     } catch (err) {
       console.error('Delete failed:', err);
     }
@@ -493,19 +515,30 @@ export default function LedgerView({
 
                         {/* Title and details */}
                         <div className="min-w-0">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center flex-wrap gap-1.5">
                             <span className="text-sm font-semibold text-white truncate">
                               {tx.category}
                             </span>
-                            <span
-                              className={`text-[10px] font-medium px-1.5 py-0.5 rounded-md ${
-                                tx.sphere === 'work'
-                                  ? 'bg-blue-500/10 text-blue-400'
-                                  : 'bg-emerald-500/10 text-emerald-400'
-                              }`}
-                            >
-                              {tx.sphere === 'work' ? 'Work' : 'Daily'}
-                            </span>
+                            {tx.relatedLoanId || tx.category?.includes('IOU') ? (
+                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                                IOU
+                              </span>
+                            ) : (
+                              <span
+                                className={`text-[10px] font-medium px-1.5 py-0.5 rounded-md ${
+                                  tx.sphere === 'work'
+                                    ? 'bg-blue-500/10 text-blue-400'
+                                    : 'bg-emerald-500/10 text-emerald-400'
+                                }`}
+                              >
+                                {tx.sphere === 'work' ? 'Work' : 'Daily'}
+                              </span>
+                            )}
+                            {tx.account && (
+                              <span className="text-[10px] font-mono text-gray-400 px-1.5 py-0.5 rounded bg-gray-800 border border-gray-750">
+                                {accountMap.get(tx.account)?.shortName || tx.account.toUpperCase()}
+                              </span>
+                            )}
                           </div>
                           {tx.note && (
                             <p className="text-xs text-gray-400 truncate mt-0.5">

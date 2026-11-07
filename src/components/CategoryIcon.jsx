@@ -19,7 +19,12 @@ import {
   Gift,
   PlusCircle,
   MoreHorizontal,
-  CircleDollarSign
+  CircleDollarSign,
+  ArrowUpRight,
+  ArrowDownLeft,
+  CheckCircle2,
+  Users,
+  Handshake
 } from 'lucide-react';
 
 const ICON_MAP = {
@@ -43,7 +48,12 @@ const ICON_MAP = {
   Gift,
   PlusCircle,
   MoreHorizontal,
-  CircleDollarSign
+  CircleDollarSign,
+  ArrowUpRight,
+  ArrowDownLeft,
+  CheckCircle2,
+  Users,
+  Handshake
 };
 
 export default function CategoryIcon({ name, className = 'w-4 h-4', color }) {
