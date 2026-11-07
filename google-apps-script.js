@@ -75,6 +75,24 @@ function doPost(e) {
       });
     }
 
+    if (action === 'reset_all') {
+      const txSheet = ss.getSheetByName('Transactions');
+      const loansSheet = ss.getSheetByName('Loans');
+      const vaultSheet = ss.getSheetByName('Vault');
+
+      [txSheet, loansSheet, vaultSheet].forEach(sheet => {
+        if (sheet && sheet.getLastRow() > 1) {
+          sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).clearContent();
+        }
+      });
+
+      return jsonResponse({
+        status: 'success',
+        message: 'All cloud data wiped',
+        serverTime: new Date().toISOString()
+      });
+    }
+
     return jsonResponse({ status: 'error', message: 'Unknown action' });
   } catch (err) {
     return jsonResponse({ status: 'error', error: err.toString() });

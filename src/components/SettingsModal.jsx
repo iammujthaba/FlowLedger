@@ -1,17 +1,20 @@
 import { useState } from 'react';
 import { syncService } from '../services/syncService';
-import { db } from '../db/db';
+import { db, DEFAULT_ACCOUNTS } from '../db/db';
 import {
   X,
   RefreshCw,
   Download,
   HelpCircle,
-  Link2
+  Link2,
+  Trash2,
+  AlertTriangle
 } from 'lucide-react';
 
 export default function SettingsModal({ isOpen, onClose, syncInfo, onTriggerSync }) {
   const [scriptUrl, setScriptUrl] = useState(() => syncService.getScriptUrl());
   const [isSaving, setIsSaving] = useState(false);
+  const [isWiping, setIsWiping] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
 
@@ -55,6 +58,59 @@ export default function SettingsModal({ isOpen, onClose, syncInfo, onTriggerSync
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Backup failed:', err);
+    }
+  };
+
+  const handleWipeAllData = async () => {
+    const confirmed = window.confirm(
+      '⚠️ RESET EVERYTHING FOR TESTING?\n\nThis will permanently:\n• Delete all Transactions\n• Delete all Loans & IOUs\n• Reset all Bank Balances to ₹0\n• Clear Cloud Sync Queue & wipe Google Sheet\n\nAre you sure you want to start with a fresh blank slate?'
+    );
+    if (!confirmed) return;
+
+    setIsWiping(true);
+    try {
+      // 1. Wipe cloud sheet if connected
+      const url = syncService.getScriptUrl();
+      if (url) {
+        try {
+          await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ action: 'reset_all' }),
+          });
+        } catch (e) {
+          console.warn('Could not wipe cloud sheet (offline or url invalid):', e);
+        }
+      }
+
+      // 2. Clear local IndexedDB tables
+      await db.transactions.clear();
+      await db.loans.clear();
+      await db.syncQueue.clear();
+
+      // 3. Reset bank balances to ₹0 in vault
+      const resetAccounts = DEFAULT_ACCOUNTS.map((a) => ({ ...a, balance: 0 }));
+      await db.vault.put({
+        key: 'bank_accounts',
+        value: resetAccounts,
+        updatedAt: new Date().toISOString(),
+      });
+      await db.vault.put({
+        key: 'usdt_balance',
+        value: 0,
+        updatedAt: new Date().toISOString(),
+      });
+
+      // 4. Clear last sync timestamp
+      localStorage.removeItem('flowledger_last_sync');
+
+      alert('Clean slate! All data has been wiped and reset to ₹0.');
+      window.location.reload();
+    } catch (err) {
+      console.error('Failed to wipe data:', err);
+      alert('Error wiping data: ' + err.message);
+    } finally {
+      setIsWiping(false);
     }
   };
 
@@ -164,6 +220,27 @@ export default function SettingsModal({ isOpen, onClose, syncInfo, onTriggerSync
           >
             <Download className="w-4 h-4 text-emerald-500" />
             <span>Export Offline Backup (JSON)</span>
+          </button>
+        </div>
+
+        {/* Development & Testing: Wipe Data Section */}
+        <div className="pt-4 border-t border-rose-500/20 space-y-3">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-rose-500">
+            <AlertTriangle className="w-4 h-4" />
+            <span>Testing & Development (Danger Zone)</span>
+          </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Permanently clear all transactions, loans, and reset all bank balances back to ₹0 for a fresh testing slate.
+          </p>
+
+          <button
+            type="button"
+            onClick={handleWipeAllData}
+            disabled={isWiping}
+            className="w-full py-2.5 px-3 rounded-xl text-xs font-semibold bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white border border-rose-500/30 transition-all flex items-center justify-center gap-2"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span>{isWiping ? 'Wiping All Data...' : 'Reset & Wipe All Data'}</span>
           </button>
         </div>
       </div>
