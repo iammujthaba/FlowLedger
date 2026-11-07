@@ -13,14 +13,34 @@ import {
   Edit2,
   Calendar,
   User,
-  Briefcase
+  Briefcase,
+  SlidersHorizontal
 } from 'lucide-react';
 
-export default function LedgerView({ transactions = [], categories = [], onEditTransaction }) {
+export default function LedgerView({
+  transactions = [],
+  categories = [],
+  accounts = [],
+  onEditTransaction,
+  onOpenAdjustBalances
+}) {
   const [timeframe, setTimeframe] = useState('monthly'); // 'weekly' | 'monthly' | 'yearly'
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [sphereFilter, setSphereFilter] = useState('all'); // 'all' | 'personal' | 'work'
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Liquid accounts and Total Liquid Balance
+  const liquidAccounts = useMemo(() => {
+    return accounts.filter((a) => a.id !== 'cc');
+  }, [accounts]);
+
+  const totalLiquidBalance = useMemo(() => {
+    return liquidAccounts.reduce((sum, a) => sum + (Number(a.balance) || 0), 0);
+  }, [liquidAccounts]);
+
+  const defaultAccount = useMemo(() => {
+    return accounts.find((a) => a.isDefault) || accounts[0] || { name: 'Punjab National Bank', shortName: 'PNB' };
+  }, [accounts]);
 
   // Category color lookup
   const categoryMap = useMemo(() => {
@@ -168,6 +188,25 @@ export default function LedgerView({ transactions = [], categories = [], onEditT
     if (!window.confirm(`Delete "${tx.category}" (₹${tx.amount})?`)) return;
     try {
       await db.transactions.delete(tx.id);
+
+      // Revert the account balance
+      const accountsVault = await db.vault.get('bank_accounts');
+      if (accountsVault && Array.isArray(accountsVault.value)) {
+        const revertDelta = tx.type === 'expense' ? Number(tx.amount) : -Number(tx.amount);
+        const updatedAccs = accountsVault.value.map((acc) => {
+          if (acc.id === (tx.account || 'pnb')) {
+            return { ...acc, balance: (Number(acc.balance) || 0) + revertDelta };
+          }
+          return acc;
+        });
+        await db.vault.put({ key: 'bank_accounts', value: updatedAccs, updatedAt: new Date().toISOString() });
+        await syncService.enqueue('vault', 'bank_accounts', 'upsert', {
+          key: 'bank_accounts',
+          value: updatedAccs,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+
       await syncService.enqueue('transactions', tx.id, 'delete', {
         id: tx.id,
         isDeleted: true,
@@ -180,6 +219,35 @@ export default function LedgerView({ transactions = [], categories = [], onEditT
 
   return (
     <div className="space-y-4 pb-20 sm:pb-8">
+      {/* ─── Total Available Balance Card ─── */}
+      <div className="bg-[#0d111a] border border-gray-800 rounded-3xl p-5 shadow-sm space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span>Total Available Balance</span>
+          </div>
+          <button
+            onClick={onOpenAdjustBalances}
+            className="flex items-center gap-1.5 py-1.5 px-3 rounded-xl text-xs font-medium bg-gray-850 hover:bg-gray-800 text-gray-300 hover:text-white border border-gray-750 transition-all"
+            title="Adjust balances to match real bank accounts"
+          >
+            <SlidersHorizontal className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Shuffle / Adjust</span>
+          </button>
+        </div>
+
+        <div>
+          <p className="text-3xl sm:text-4xl font-extrabold font-mono text-white tracking-tight">
+            ₹{totalLiquidBalance.toLocaleString('en-IN')}
+          </p>
+          <div className="flex items-center gap-2 mt-1.5 text-xs text-gray-400">
+            <span className="text-emerald-400 font-medium">● {liquidAccounts.length} Liquid Accounts</span>
+            <span>•</span>
+            <span>Default: <b className="text-white font-medium">{defaultAccount?.name || 'PNB'}</b></span>
+          </div>
+        </div>
+      </div>
+
       {/* Timeframe & Date Navigation */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-[#0d111a] p-3 rounded-2xl border border-gray-800 shadow-sm">
         {/* Timeframe selector pills */}

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { db, initializeDatabase } from './db/db';
+import { db, initializeDatabase, DEFAULT_ACCOUNTS } from './db/db';
 import { syncService } from './services/syncService';
 import { useLiveQuery } from 'dexie-react-hooks';
 
@@ -11,11 +11,13 @@ import VaultCommitmentsView from './components/VaultCommitmentsView';
 import InsightsView from './components/InsightsView';
 import QuickAddModal from './components/QuickAddModal';
 import SettingsModal from './components/SettingsModal';
+import AdjustBalancesModal from './components/AdjustBalancesModal';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('ledger'); // 'ledger' | 'loans' | 'vault' | 'insights'
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isAdjustBalancesOpen, setIsAdjustBalancesOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState(null);
 
   // Sync state
@@ -54,6 +56,8 @@ export default function App() {
     return acc;
   }, {});
 
+  const accounts = Array.isArray(vault.bank_accounts) ? vault.bank_accounts : DEFAULT_ACCOUNTS;
+
   const handleEditTransaction = (tx) => {
     setEditingTransaction(tx);
     setIsAddOpen(true);
@@ -91,7 +95,9 @@ export default function App() {
             <LedgerView
               transactions={transactions}
               categories={categories}
+              accounts={accounts}
               onEditTransaction={handleEditTransaction}
+              onOpenAdjustBalances={() => setIsAdjustBalancesOpen(true)}
             />
           )}
 
@@ -113,8 +119,16 @@ export default function App() {
           onClose={handleCloseAdd}
           initialSphere="personal"
           editTransaction={editingTransaction}
+          accounts={accounts}
         />
       )}
+
+      {/* Adjust Balances / Account Shuffle Modal */}
+      <AdjustBalancesModal
+        isOpen={isAdjustBalancesOpen}
+        onClose={() => setIsAdjustBalancesOpen(false)}
+        accounts={accounts}
+      />
 
       {/* Settings Modal */}
       {isSettingsOpen && (

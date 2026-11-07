@@ -3,12 +3,22 @@ import Dexie from 'dexie';
 export const db = new Dexie('FlowLedgerDB');
 
 db.version(1).stores({
-  transactions: 'id, date, sphere, type, category, amount, updatedAt, syncStatus',
+  transactions: 'id, date, sphere, type, category, amount, account, updatedAt, syncStatus',
   loans: 'id, personName, type, amount, remainingAmount, date, dueDate, status, updatedAt, syncStatus',
   vault: 'key, updatedAt',
   syncQueue: '++id, entity, entityId, action, createdAt',
   categories: 'id, sphere, type, name',
 });
+
+// Default accounts configuration
+export const DEFAULT_ACCOUNTS = [
+  { id: 'pnb', name: 'Punjab National Bank', shortName: 'PNB', isDefault: true, balance: 0, color: '#f59e0b' },
+  { id: 'kgb', name: 'Kerala Gramin Bank', shortName: 'KGB', isDefault: false, balance: 0, color: '#10b981' },
+  { id: 'kotak', name: 'Kotak Mahindra Bank', shortName: 'Kotak', isDefault: false, balance: 0, color: '#3b82f6' },
+  { id: 'sib', name: 'South Indian Bank', shortName: 'SIB', isDefault: false, balance: 0, color: '#ef4444' },
+  { id: 'cash', name: 'Cash in Hand', shortName: 'Cash', isDefault: false, balance: 0, color: '#8b5cf6' },
+  { id: 'cc', name: 'Credit Card', shortName: 'Credit Card', isDefault: false, balance: 0, color: '#ec4899' },
+];
 
 // Default categories
 export const DEFAULT_CATEGORIES = [
@@ -46,6 +56,16 @@ export async function initializeDatabase() {
     await db.categories.bulkAdd(DEFAULT_CATEGORIES);
   }
 
+  // Initialize bank accounts if not present
+  const accountsVault = await db.vault.get('bank_accounts');
+  if (!accountsVault) {
+    await db.vault.put({
+      key: 'bank_accounts',
+      value: DEFAULT_ACCOUNTS,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
   // Initialize vault with default values if not present
   const usdtVault = await db.vault.get('usdt_balance');
   if (!usdtVault) {
@@ -80,4 +100,3 @@ export async function initializeDatabase() {
     });
   }
 }
-

@@ -1,13 +1,23 @@
 import { useState } from 'react';
-import { db } from '../db/db';
+import { db, DEFAULT_ACCOUNTS } from '../db/db';
 import { syncService } from '../services/syncService';
 import CategoryIcon from './CategoryIcon';
 import { X, Check, User, Briefcase, PlusCircle, MinusCircle } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 
-export default function QuickAddModal({ isOpen, onClose, initialSphere = 'personal', editTransaction = null }) {
+export default function QuickAddModal({
+  isOpen,
+  onClose,
+  initialSphere = 'personal',
+  editTransaction = null,
+  accounts = []
+}) {
+  const accountsList = accounts.length > 0 ? accounts : DEFAULT_ACCOUNTS;
+  const defaultAcc = accountsList.find((a) => a.isDefault) || accountsList[0] || { id: 'pnb' };
+
   const [sphere, setSphere] = useState(() => editTransaction?.sphere || initialSphere);
   const [type, setType] = useState(() => editTransaction?.type || 'expense');
+  const [account, setAccount] = useState(() => editTransaction?.account || defaultAcc.id);
   const [amount, setAmount] = useState(() => (editTransaction ? String(editTransaction.amount) : ''));
   const [date, setDate] = useState(() => editTransaction?.date || new Date().toISOString().split('T')[0]);
   const [category, setCategory] = useState(() => editTransaction?.category || '');
@@ -30,6 +40,7 @@ export default function QuickAddModal({ isOpen, onClose, initialSphere = 'person
   const yesterdayStr = yesterday.toISOString().split('T')[0];
 
   const effectiveCategory = category || (filteredCategories.length > 0 ? filteredCategories[0].name : '');
+  const activeAccountId = account || defaultAcc.id;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -46,6 +57,7 @@ export default function QuickAddModal({ isOpen, onClose, initialSphere = 'person
         date: date || todayStr,
         sphere,
         type,
+        account: activeAccountId,
         category: effectiveCategory || (type === 'expense' ? 'Other Expense' : 'Other Income'),
         amount: parsedAmount,
         note: note.trim(),
@@ -55,7 +67,35 @@ export default function QuickAddModal({ isOpen, onClose, initialSphere = 'person
 
       await db.transactions.put(txRecord);
 
-      // Enqueue sync action
+      // Adjust the chosen account balance in vault
+      const accountsVault = await db.vault.get('bank_accounts');
+      if (accountsVault && Array.isArray(accountsVault.value)) {
+        const delta = type === 'expense' ? -parsedAmount : parsedAmount;
+        let prevDelta = 0;
+        if (editTransaction) {
+          prevDelta = editTransaction.type === 'expense' ? Number(editTransaction.amount) : -Number(editTransaction.amount);
+        }
+
+        const updatedAccs = accountsVault.value.map((acc) => {
+          let bal = acc.balance;
+          if (editTransaction && editTransaction.account === acc.id) {
+            bal += prevDelta;
+          }
+          if (acc.id === activeAccountId) {
+            bal += delta;
+          }
+          return { ...acc, balance: bal };
+        });
+
+        await db.vault.put({ key: 'bank_accounts', value: updatedAccs, updatedAt: now });
+        await syncService.enqueue('vault', 'bank_accounts', 'upsert', {
+          key: 'bank_accounts',
+          value: updatedAccs,
+          updatedAt: now,
+        });
+      }
+
+      // Enqueue sync action for transaction
       await syncService.enqueue('transactions', txId, 'upsert', {
         ...txRecord,
         isDeleted: false,
@@ -71,17 +111,17 @@ export default function QuickAddModal({ isOpen, onClose, initialSphere = 'person
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="w-full sm:max-w-lg bg-white dark:bg-[#0d111a] rounded-t-3xl sm:rounded-3xl border border-gray-200 dark:border-gray-800 shadow-2xl overflow-hidden max-h-[92vh] flex flex-col animate-modal-in">
+      <div className="w-full sm:max-w-lg bg-[#0d111a] rounded-t-3xl sm:rounded-3xl border border-gray-800 shadow-2xl overflow-hidden max-h-[92vh] flex flex-col animate-modal-in">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
           <div className="flex items-center gap-2">
-            <h2 className="text-base font-bold text-gray-900 dark:text-white">
+            <h2 className="text-base font-bold text-white">
               {editTransaction ? 'Edit Transaction' : 'Record Transaction'}
             </h2>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            className="p-1.5 rounded-full text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -91,10 +131,10 @@ export default function QuickAddModal({ isOpen, onClose, initialSphere = 'person
         <form onSubmit={handleSubmit} className="p-5 overflow-y-auto space-y-4 custom-scrollbar">
           {/* Sphere Switcher: Daily Life vs Work */}
           <div>
-            <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5">
+            <label className="block text-xs font-semibold text-gray-400 mb-1.5">
               Expense Sphere
             </label>
-            <div className="grid grid-cols-2 gap-2 p-1 bg-gray-100 dark:bg-gray-800 rounded-xl">
+            <div className="grid grid-cols-2 gap-2 p-1 bg-gray-850 rounded-xl">
               <button
                 type="button"
                 onClick={() => {
@@ -103,8 +143,8 @@ export default function QuickAddModal({ isOpen, onClose, initialSphere = 'person
                 }}
                 className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold transition-all ${
                   sphere === 'personal'
-                    ? 'bg-white dark:bg-gray-700 text-emerald-600 dark:text-emerald-400 shadow-sm'
-                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
+                    ? 'bg-gray-700 text-emerald-400 shadow-sm'
+                    : 'text-gray-400 hover:text-gray-200'
                 }`}
               >
                 <User className="w-3.5 h-3.5" />
@@ -118,8 +158,8 @@ export default function QuickAddModal({ isOpen, onClose, initialSphere = 'person
                 }}
                 className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold transition-all ${
                   sphere === 'work'
-                    ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
-                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
+                    ? 'bg-gray-700 text-blue-400 shadow-sm'
+                    : 'text-gray-400 hover:text-gray-200'
                 }`}
               >
                 <Briefcase className="w-3.5 h-3.5" />
@@ -138,8 +178,8 @@ export default function QuickAddModal({ isOpen, onClose, initialSphere = 'person
               }}
               className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold border transition-all ${
                 type === 'expense'
-                  ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30'
-                  : 'bg-gray-50 dark:bg-gray-800/50 text-gray-400 border-transparent hover:text-gray-600 dark:hover:text-gray-300'
+                  ? 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                  : 'bg-gray-850/50 text-gray-400 border-transparent hover:text-gray-300'
               }`}
             >
               <MinusCircle className="w-4 h-4" />
@@ -153,8 +193,8 @@ export default function QuickAddModal({ isOpen, onClose, initialSphere = 'person
               }}
               className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold border transition-all ${
                 type === 'income'
-                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
-                  : 'bg-gray-50 dark:bg-gray-800/50 text-gray-400 border-transparent hover:text-gray-600 dark:hover:text-gray-300'
+                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                  : 'bg-gray-850/50 text-gray-400 border-transparent hover:text-gray-300'
               }`}
             >
               <PlusCircle className="w-4 h-4" />
@@ -164,11 +204,11 @@ export default function QuickAddModal({ isOpen, onClose, initialSphere = 'person
 
           {/* Amount Input */}
           <div>
-            <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">
+            <label className="block text-xs font-semibold text-gray-400 mb-1">
               Amount (₹)
             </label>
             <div className="relative">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-2xl font-bold text-gray-400 dark:text-gray-500">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-2xl font-bold text-gray-500">
                 ₹
               </span>
               <input
@@ -180,14 +220,42 @@ export default function QuickAddModal({ isOpen, onClose, initialSphere = 'person
                 placeholder="0"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-2xl text-2xl font-bold text-gray-900 dark:text-white focus:border-emerald-500 dark:focus:border-emerald-500 focus:ring-0 outline-none transition-all font-mono"
+                className="w-full pl-10 pr-4 py-3 bg-gray-850/60 border border-gray-750 rounded-2xl text-2xl font-bold text-white focus:border-emerald-500 focus:ring-0 outline-none transition-all font-mono"
               />
+            </div>
+          </div>
+
+          {/* Optional Bank / Account Selector (Pre-selected to PNB / Default) */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-400 mb-1.5 flex items-center justify-between">
+              <span>{type === 'expense' ? 'Paid From Account' : 'Deposited To Account'}</span>
+              <span className="text-[11px] text-gray-500 font-normal">Optional</span>
+            </label>
+            <div className="flex flex-wrap gap-1.5">
+              {accountsList.map((acc) => {
+                const isSelected = activeAccountId === acc.id;
+                return (
+                  <button
+                    key={acc.id}
+                    type="button"
+                    onClick={() => setAccount(acc.id)}
+                    className={`py-1.5 px-2.5 rounded-xl text-xs font-medium border transition-all ${
+                      isSelected
+                        ? 'bg-gray-800 text-white border-emerald-500 shadow-sm'
+                        : 'bg-gray-850/50 text-gray-400 border-gray-800 hover:border-gray-700'
+                    }`}
+                  >
+                    <span>{acc.shortName || acc.name}</span>
+                    {acc.isDefault && <span className="text-amber-400 ml-1 font-bold">★</span>}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
           {/* Date Selector (Date only) */}
           <div>
-            <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">
+            <label className="block text-xs font-semibold text-gray-400 mb-1">
               Transaction Date
             </label>
             <div className="flex gap-2 items-center">
@@ -196,8 +264,8 @@ export default function QuickAddModal({ isOpen, onClose, initialSphere = 'person
                 onClick={() => setDate(todayStr)}
                 className={`py-1.5 px-3 rounded-lg text-xs font-medium border transition-all ${
                   date === todayStr
-                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
-                    : 'bg-gray-50 dark:bg-gray-800/50 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700'
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                    : 'bg-gray-850/50 text-gray-400 border-gray-750'
                 }`}
               >
                 Today
@@ -207,8 +275,8 @@ export default function QuickAddModal({ isOpen, onClose, initialSphere = 'person
                 onClick={() => setDate(yesterdayStr)}
                 className={`py-1.5 px-3 rounded-lg text-xs font-medium border transition-all ${
                   date === yesterdayStr
-                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
-                    : 'bg-gray-50 dark:bg-gray-800/50 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700'
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                    : 'bg-gray-850/50 text-gray-400 border-gray-750'
                 }`}
               >
                 Yesterday
@@ -218,7 +286,7 @@ export default function QuickAddModal({ isOpen, onClose, initialSphere = 'person
                   type="date"
                   value={date}
                   onChange={(e) => setDate(e.target.value)}
-                  className="w-full px-3 py-1.5 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-800 dark:text-gray-200 outline-none focus:border-emerald-500"
+                  className="w-full px-3 py-1.5 bg-gray-850/50 border border-gray-750 rounded-lg text-xs text-gray-200 outline-none focus:border-emerald-500"
                 />
               </div>
             </div>
@@ -226,7 +294,7 @@ export default function QuickAddModal({ isOpen, onClose, initialSphere = 'person
 
           {/* Category Chips */}
           <div>
-            <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5">
+            <label className="block text-xs font-semibold text-gray-400 mb-1.5">
               Category
             </label>
             <div className="flex flex-wrap gap-2 max-h-36 overflow-y-auto p-1 custom-scrollbar">
@@ -240,7 +308,7 @@ export default function QuickAddModal({ isOpen, onClose, initialSphere = 'person
                     className={`flex items-center gap-1.5 py-1.5 px-3 rounded-xl text-xs font-medium border transition-all ${
                       isSelected
                         ? 'bg-emerald-500 text-white border-emerald-500 shadow-sm'
-                        : 'bg-gray-50 dark:bg-gray-800/60 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                        : 'bg-gray-850/60 text-gray-300 border-gray-750 hover:border-gray-600'
                     }`}
                   >
                     <CategoryIcon name={cat.icon} className="w-3.5 h-3.5" color={isSelected ? '#ffffff' : cat.color} />
@@ -253,7 +321,7 @@ export default function QuickAddModal({ isOpen, onClose, initialSphere = 'person
 
           {/* Note Input */}
           <div>
-            <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">
+            <label className="block text-xs font-semibold text-gray-400 mb-1">
               Note (Optional)
             </label>
             <input
@@ -261,7 +329,7 @@ export default function QuickAddModal({ isOpen, onClose, initialSphere = 'person
               placeholder="e.g. Petrol for Bangalore trip, Lunch with Rahul..."
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-400 outline-none focus:border-emerald-500 transition-all"
+              className="w-full px-4 py-2.5 bg-gray-850/60 border border-gray-750 rounded-xl text-sm text-white placeholder-gray-500 outline-none focus:border-emerald-500 transition-all"
             />
           </div>
 
