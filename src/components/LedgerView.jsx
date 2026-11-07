@@ -70,7 +70,6 @@ export default function LedgerView({ transactions = [], categories = [], onEditT
       const start = new Date(d.getFullYear(), d.getMonth(), 1);
       const end = new Date(d.getFullYear(), d.getMonth() + 1, 0);
 
-      // Format ISO string carefully using local year/month/date
       const sYear = start.getFullYear();
       const sMonth = String(start.getMonth() + 1).padStart(2, '0');
       const eDay = String(end.getDate()).padStart(2, '0');
@@ -93,7 +92,9 @@ export default function LedgerView({ transactions = [], categories = [], onEditT
   // Filter transactions for this timeframe and criteria
   const filteredTransactions = useMemo(() => {
     return transactions.filter((tx) => {
-      if (tx.date < startDateStr || tx.date > endDateStr) return false;
+      // Normalize date comparison by taking first 10 characters (YYYY-MM-DD)
+      const txDateStr = String(tx.date || '').split('T')[0];
+      if (txDateStr < startDateStr || txDateStr > endDateStr) return false;
       if (sphereFilter !== 'all' && tx.sphere !== sphereFilter) return false;
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase();
@@ -106,11 +107,13 @@ export default function LedgerView({ transactions = [], categories = [], onEditT
   }, [transactions, startDateStr, endDateStr, sphereFilter, searchQuery]);
 
   // Aggregate metrics
-  const { totalIncome, totalExpense, personalExpense, workExpense } = useMemo(() => {
+  const { totalIncome, totalExpense, personalExpense, workExpense, personalCount, workCount } = useMemo(() => {
     let income = 0;
     let expense = 0;
     let personalExp = 0;
     let workExp = 0;
+    let pCount = 0;
+    let wCount = 0;
 
     filteredTransactions.forEach((tx) => {
       const amt = Number(tx.amount) || 0;
@@ -118,8 +121,13 @@ export default function LedgerView({ transactions = [], categories = [], onEditT
         income += amt;
       } else {
         expense += amt;
-        if (tx.sphere === 'personal') personalExp += amt;
-        else if (tx.sphere === 'work') workExp += amt;
+        if (tx.sphere === 'personal') {
+          personalExp += amt;
+          pCount++;
+        } else if (tx.sphere === 'work') {
+          workExp += amt;
+          wCount++;
+        }
       }
     });
 
@@ -128,6 +136,8 @@ export default function LedgerView({ transactions = [], categories = [], onEditT
       totalExpense: expense,
       personalExpense: personalExp,
       workExpense: workExp,
+      personalCount: pCount,
+      workCount: wCount,
     };
   }, [filteredTransactions]);
 
@@ -137,15 +147,18 @@ export default function LedgerView({ transactions = [], categories = [], onEditT
   const groupedByDate = useMemo(() => {
     const groups = {};
     const sorted = [...filteredTransactions].sort((a, b) => {
-      if (a.date !== b.date) return b.date.localeCompare(a.date);
+      const aDate = String(a.date || '').split('T')[0];
+      const bDate = String(b.date || '').split('T')[0];
+      if (aDate !== bDate) return bDate.localeCompare(aDate);
       return (b.updatedAt || '').localeCompare(a.updatedAt || '');
     });
 
     sorted.forEach((tx) => {
-      if (!groups[tx.date]) {
-        groups[tx.date] = [];
+      const cleanKey = String(tx.date || '').split('T')[0];
+      if (!groups[cleanKey]) {
+        groups[cleanKey] = [];
       }
-      groups[tx.date].push(tx);
+      groups[cleanKey].push(tx);
     });
 
     return Object.entries(groups);
@@ -166,29 +179,54 @@ export default function LedgerView({ transactions = [], categories = [], onEditT
   };
 
   const formatDateHeader = (dateStr) => {
-    const d = new Date(dateStr + 'T00:00:00');
-    return d.toLocaleDateString('en-IN', {
+    if (!dateStr) return 'No Date';
+    const cleanStr = String(dateStr).split('T')[0];
+    const parts = cleanStr.split('-');
+    
+    let d;
+    if (parts.length === 3) {
+      d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+    } else {
+      d = new Date(dateStr);
+    }
+
+    if (isNaN(d.getTime())) {
+      return String(dateStr);
+    }
+
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+
+    let prefix = '';
+    if (cleanStr === todayStr) prefix = 'Today • ';
+    else if (cleanStr === yesterdayStr) prefix = 'Yesterday • ';
+
+    return `${prefix}${d.toLocaleDateString('en-IN', {
       weekday: 'short',
       day: 'numeric',
       month: 'short',
       year: 'numeric',
-    });
+    })}`;
   };
 
   return (
-    <div className="space-y-5 pb-20 sm:pb-8">
+    <div className="space-y-4 pb-20 sm:pb-8">
       {/* Timeframe & Date Navigation */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white dark:bg-[#0d111a] p-3 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-[#0d111a] p-3 rounded-2xl border border-gray-800 shadow-sm">
         {/* Timeframe selector pills */}
-        <div className="flex bg-gray-100 dark:bg-gray-850 p-1 rounded-xl">
+        <div className="flex bg-gray-800 p-1 rounded-xl">
           {['weekly', 'monthly', 'yearly'].map((tf) => (
             <button
               key={tf}
               onClick={() => setTimeframe(tf)}
               className={`flex-1 sm:flex-initial py-1.5 px-3 rounded-lg text-xs font-semibold capitalize transition-all ${
                 timeframe === tf
-                  ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
-                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
+                  ? 'bg-gray-700 text-white shadow-sm'
+                  : 'text-gray-400 hover:text-gray-200'
               }`}
             >
               {tf}
@@ -200,17 +238,17 @@ export default function LedgerView({ transactions = [], categories = [], onEditT
         <div className="flex items-center justify-between sm:justify-end gap-2">
           <button
             onClick={handlePrev}
-            className="p-1.5 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300 transition-colors"
+            className="p-1.5 rounded-lg border border-gray-700 hover:bg-gray-800 text-gray-300 transition-colors"
             aria-label="Previous period"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
-          <span className="text-xs font-bold text-gray-800 dark:text-gray-200 min-w-36 text-center">
+          <span className="text-xs font-bold text-gray-200 min-w-36 text-center">
             {label}
           </span>
           <button
             onClick={handleNext}
-            className="p-1.5 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300 transition-colors"
+            className="p-1.5 rounded-lg border border-gray-700 hover:bg-gray-800 text-gray-300 transition-colors"
             aria-label="Next period"
           >
             <ChevronRight className="w-4 h-4" />
@@ -221,35 +259,35 @@ export default function LedgerView({ transactions = [], categories = [], onEditT
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {/* Total Inflow */}
-        <div className="bg-white dark:bg-[#0d111a] border border-gray-200 dark:border-gray-800/80 rounded-2xl p-4 shadow-sm">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+        <div className="bg-[#0d111a] border border-gray-800/80 rounded-2xl p-4 shadow-sm">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-400">
             <ArrowDownRight className="w-4 h-4" />
             <span>Total Inflow</span>
           </div>
-          <p className="text-xl sm:text-2xl font-bold font-mono text-gray-900 dark:text-white mt-1">
+          <p className="text-xl sm:text-2xl font-bold font-mono text-white mt-1">
             ₹{totalIncome.toLocaleString('en-IN')}
           </p>
         </div>
 
         {/* Total Outflow */}
-        <div className="bg-white dark:bg-[#0d111a] border border-gray-200 dark:border-gray-800/80 rounded-2xl p-4 shadow-sm">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-rose-500 dark:text-rose-400">
+        <div className="bg-[#0d111a] border border-gray-800/80 rounded-2xl p-4 shadow-sm">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-rose-400">
             <ArrowUpRight className="w-4 h-4" />
             <span>Total Outflow</span>
           </div>
-          <p className="text-xl sm:text-2xl font-bold font-mono text-gray-900 dark:text-white mt-1">
+          <p className="text-xl sm:text-2xl font-bold font-mono text-white mt-1">
             ₹{totalExpense.toLocaleString('en-IN')}
           </p>
         </div>
 
         {/* Net Savings */}
-        <div className="col-span-2 sm:col-span-1 bg-white dark:bg-[#0d111a] border border-gray-200 dark:border-gray-800/80 rounded-2xl p-4 shadow-sm">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 dark:text-gray-400">
+        <div className="col-span-2 sm:col-span-1 bg-[#0d111a] border border-gray-800/80 rounded-2xl p-4 shadow-sm">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-400">
             <span>Net Cashflow</span>
           </div>
           <p
             className={`text-xl sm:text-2xl font-bold font-mono mt-1 ${
-              netSavings >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500 dark:text-rose-400'
+              netSavings >= 0 ? 'text-emerald-400' : 'text-rose-400'
             }`}
           >
             {netSavings >= 0 ? '+' : ''}₹{netSavings.toLocaleString('en-IN')}
@@ -257,91 +295,136 @@ export default function LedgerView({ transactions = [], categories = [], onEditT
         </div>
       </div>
 
-      {/* Sphere Split Indicator Card */}
-      {totalExpense > 0 && (
-        <div className="bg-white dark:bg-[#0d111a] border border-gray-200 dark:border-gray-800/80 rounded-2xl p-3 shadow-sm">
-          <div className="flex items-center justify-between text-xs mb-2">
-            <span className="flex items-center gap-1 text-gray-600 dark:text-gray-400">
-              <User className="w-3 h-3 text-emerald-500" />
-              Daily Life: <b className="text-gray-900 dark:text-white font-mono">₹{personalExpense.toLocaleString('en-IN')}</b> ({Math.round((personalExpense / totalExpense) * 100)}%)
-            </span>
-            <span className="flex items-center gap-1 text-gray-600 dark:text-gray-400">
-              <Briefcase className="w-3 h-3 text-blue-500" />
-              Work: <b className="text-gray-900 dark:text-white font-mono">₹{workExpense.toLocaleString('en-IN')}</b> ({Math.round((workExpense / totalExpense) * 100)}%)
-            </span>
-          </div>
-          <div className="w-full h-2 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden flex">
-            <div
-              className="h-full bg-emerald-500"
-              style={{ width: `${(personalExpense / totalExpense) * 100}%` }}
-              title="Daily Life"
-            />
-            <div
-              className="h-full bg-blue-500"
-              style={{ width: `${(workExpense / totalExpense) * 100}%` }}
-              title="Work"
-            />
-          </div>
-        </div>
-      )}
-
       {/* Filters & Search */}
-      <div className="flex flex-col sm:flex-row gap-2">
-        {/* Sphere Filter */}
-        <div className="flex bg-gray-100 dark:bg-gray-850 p-1 rounded-xl border border-gray-200 dark:border-gray-800">
-          <button
-            onClick={() => setSphereFilter('all')}
-            className={`flex-1 py-1 px-3 rounded-lg text-xs font-semibold transition-all ${
-              sphereFilter === 'all'
-                ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
-                : 'text-gray-500 dark:text-gray-400'
-            }`}
-          >
-            All
-          </button>
-          <button
-            onClick={() => setSphereFilter('personal')}
-            className={`flex-1 flex items-center justify-center gap-1 py-1 px-3 rounded-lg text-xs font-semibold transition-all ${
-              sphereFilter === 'personal'
-                ? 'bg-white dark:bg-gray-700 text-emerald-600 dark:text-emerald-400 shadow-sm'
-                : 'text-gray-500 dark:text-gray-400'
-            }`}
-          >
-            <User className="w-3 h-3" />
-            <span>Daily Life</span>
-          </button>
-          <button
-            onClick={() => setSphereFilter('work')}
-            className={`flex-1 flex items-center justify-center gap-1 py-1 px-3 rounded-lg text-xs font-semibold transition-all ${
-              sphereFilter === 'work'
-                ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
-                : 'text-gray-500 dark:text-gray-400'
-            }`}
-          >
-            <Briefcase className="w-3 h-3" />
-            <span>Work</span>
-          </button>
+      <div className="space-y-2.5">
+        <div className="flex flex-col sm:flex-row gap-2">
+          {/* Sphere Filter */}
+          <div className="flex bg-gray-850 p-1 rounded-xl border border-gray-800">
+            <button
+              onClick={() => setSphereFilter('all')}
+              className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all ${
+                sphereFilter === 'all'
+                  ? 'bg-gray-700 text-white shadow-sm'
+                  : 'text-gray-400'
+              }`}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setSphereFilter('personal')}
+              className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all ${
+                sphereFilter === 'personal'
+                  ? 'bg-gray-700 text-emerald-400 shadow-sm'
+                  : 'text-gray-400'
+              }`}
+            >
+              <User className="w-3 h-3" />
+              <span>Daily Life</span>
+            </button>
+            <button
+              onClick={() => setSphereFilter('work')}
+              className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all ${
+                sphereFilter === 'work'
+                  ? 'bg-gray-700 text-blue-400 shadow-sm'
+                  : 'text-gray-400'
+              }`}
+            >
+              <Briefcase className="w-3 h-3" />
+              <span>Work</span>
+            </button>
+          </div>
+
+          {/* Search */}
+          <div className="flex-1 relative">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search note or category..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 bg-[#0d111a] border border-gray-800 rounded-xl text-xs text-white placeholder-gray-400 outline-none focus:border-emerald-500 transition-all"
+            />
+          </div>
         </div>
 
-        {/* Search */}
-        <div className="flex-1 relative">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search note or category..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 bg-white dark:bg-[#0d111a] border border-gray-200 dark:border-gray-800 rounded-xl text-xs text-gray-900 dark:text-white placeholder-gray-400 outline-none focus:border-emerald-500 transition-all"
-          />
-        </div>
+        {/* Organized Sub-Cards Under Filter: Contextual Breakdown */}
+        {sphereFilter === 'all' ? (
+          <div className="grid grid-cols-2 gap-2.5">
+            {/* Daily Life Card */}
+            <div className="bg-[#0d111a] border border-gray-800/80 rounded-2xl p-3 shadow-sm">
+              <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
+                <span className="flex items-center gap-1.5 font-medium text-emerald-400">
+                  <User className="w-3.5 h-3.5" />
+                  <span>Daily Life</span>
+                </span>
+                <span className="text-[11px] text-gray-500 font-mono">
+                  {personalCount} {personalCount === 1 ? 'item' : 'items'}
+                </span>
+              </div>
+              <p className="text-lg font-bold font-mono text-white">
+                ₹{personalExpense.toLocaleString('en-IN')}
+              </p>
+            </div>
+
+            {/* Work Card */}
+            <div className="bg-[#0d111a] border border-gray-800/80 rounded-2xl p-3 shadow-sm">
+              <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
+                <span className="flex items-center gap-1.5 font-medium text-blue-400">
+                  <Briefcase className="w-3.5 h-3.5" />
+                  <span>Work-Related</span>
+                </span>
+                <span className="text-[11px] text-gray-500 font-mono">
+                  {workCount} {workCount === 1 ? 'item' : 'items'}
+                </span>
+              </div>
+              <p className="text-lg font-bold font-mono text-white">
+                ₹{workExpense.toLocaleString('en-IN')}
+              </p>
+            </div>
+          </div>
+        ) : sphereFilter === 'personal' ? (
+          <div className="bg-[#0d111a] border border-emerald-500/25 rounded-2xl p-3 flex items-center justify-between shadow-sm">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+                <User className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-emerald-400">Daily Life Expenses</p>
+                <p className="text-[11px] text-gray-400 font-mono">
+                  {personalCount} {personalCount === 1 ? 'entry recorded' : 'entries recorded'}
+                </p>
+              </div>
+            </div>
+            <p className="text-lg font-bold font-mono text-white">
+              ₹{personalExpense.toLocaleString('en-IN')}
+            </p>
+          </div>
+        ) : (
+          <div className="bg-[#0d111a] border border-blue-500/25 rounded-2xl p-3 flex items-center justify-between shadow-sm">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center">
+                <Briefcase className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-blue-400">Work-Related Expenses</p>
+                <p className="text-[11px] text-gray-400 font-mono">
+                  {workCount} {workCount === 1 ? 'entry recorded' : 'entries recorded'}
+                </p>
+              </div>
+            </div>
+            <p className="text-lg font-bold font-mono text-white">
+              ₹{workExpense.toLocaleString('en-IN')}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Transaction List */}
       {groupedByDate.length === 0 ? (
-        <div className="text-center py-12 bg-white dark:bg-[#0d111a] rounded-2xl border border-gray-200 dark:border-gray-800">
-          <Calendar className="w-10 h-10 mx-auto text-gray-300 dark:text-gray-700 mb-2" />
-          <p className="text-sm font-semibold text-gray-600 dark:text-gray-400">No transactions recorded</p>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+        <div className="text-center py-12 bg-[#0d111a] rounded-2xl border border-gray-800">
+          <Calendar className="w-10 h-10 mx-auto text-gray-700 mb-2" />
+          <p className="text-sm font-semibold text-gray-400">No transactions recorded</p>
+          <p className="text-xs text-gray-500 mt-0.5">
             Tap the + button to log an expense or income
           </p>
         </div>
@@ -351,23 +434,23 @@ export default function LedgerView({ transactions = [], categories = [], onEditT
             <div key={dateKey} className="space-y-2">
               {/* Date Header */}
               <div className="flex items-center justify-between px-1">
-                <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
                   {formatDateHeader(dateKey)}
                 </span>
-                <span className="text-xs font-mono font-medium text-gray-400 dark:text-gray-500">
+                <span className="text-xs font-mono font-medium text-gray-500">
                   {txList.length} {txList.length === 1 ? 'item' : 'items'}
                 </span>
               </div>
 
               {/* Transactions in this date */}
-              <div className="bg-white dark:bg-[#0d111a] border border-gray-200 dark:border-gray-800/80 rounded-2xl divide-y divide-gray-100 dark:divide-gray-800/60 overflow-hidden shadow-sm">
+              <div className="bg-[#0d111a] border border-gray-800/80 rounded-2xl divide-y divide-gray-800/60 overflow-hidden shadow-sm">
                 {txList.map((tx) => {
                   const catDef = categoryMap.get(tx.category);
                   const isExpense = tx.type === 'expense';
                   return (
                     <div
                       key={tx.id}
-                      className="p-3.5 flex items-center justify-between gap-3 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors group"
+                      className="p-3.5 flex items-center justify-between gap-3 hover:bg-gray-800/40 transition-colors group"
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         {/* Icon */}
@@ -387,21 +470,21 @@ export default function LedgerView({ transactions = [], categories = [], onEditT
                         {/* Title and details */}
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                            <span className="text-sm font-semibold text-white truncate">
                               {tx.category}
                             </span>
                             <span
                               className={`text-[10px] font-medium px-1.5 py-0.5 rounded-md ${
                                 tx.sphere === 'work'
-                                  ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
-                                  : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                                  ? 'bg-blue-500/10 text-blue-400'
+                                  : 'bg-emerald-500/10 text-emerald-400'
                               }`}
                             >
                               {tx.sphere === 'work' ? 'Work' : 'Daily'}
                             </span>
                           </div>
                           {tx.note && (
-                            <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
+                            <p className="text-xs text-gray-400 truncate mt-0.5">
                               {tx.note}
                             </p>
                           )}
@@ -413,8 +496,8 @@ export default function LedgerView({ transactions = [], categories = [], onEditT
                         <span
                           className={`text-sm font-bold font-mono ${
                             isExpense
-                              ? 'text-rose-500 dark:text-rose-400'
-                              : 'text-emerald-600 dark:text-emerald-400'
+                              ? 'text-rose-400'
+                              : 'text-emerald-400'
                           }`}
                         >
                           {isExpense ? '-' : '+'}₹{Number(tx.amount).toLocaleString('en-IN')}
@@ -424,14 +507,14 @@ export default function LedgerView({ transactions = [], categories = [], onEditT
                         <div className="flex items-center gap-1 opacity-80 sm:opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
                             onClick={() => onEditTransaction(tx)}
-                            className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                            className="p-1 text-gray-400 hover:text-gray-200 rounded-lg hover:bg-gray-800 transition-colors"
                             title="Edit"
                           >
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
                           <button
                             onClick={() => handleDelete(tx)}
-                            className="p-1 text-gray-400 hover:text-rose-500 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
+                            className="p-1 text-gray-400 hover:text-rose-500 rounded-lg hover:bg-rose-950/30 transition-colors"
                             title="Delete"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
