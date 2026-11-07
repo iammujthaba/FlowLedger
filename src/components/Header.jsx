@@ -56,11 +56,22 @@ export default function Header({
   return (
     <header className="mb-5">
       <div className="flex items-center justify-between pb-3 border-b border-gray-800/80">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-white">
-            FlowLedger
-          </h1>
-          <p className="text-xs text-gray-400">Personal & Work Cashflow</p>
+        <div className="flex items-center gap-3">
+          {/* Official FlowLedger App Emblem */}
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center shadow-md shadow-emerald-500/20 border border-emerald-400/20 shrink-0">
+            <svg className="w-5 h-5 text-white" viewBox="0 0 32 32" fill="none">
+              <path d="M7.5 11.5 L21.5 11.5 M17.5 7.5 L22.5 11.5 L17.5 15.5" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M24.5 20.5 L10.5 20.5 M14.5 16.5 L9.5 20.5 L14.5 24.5" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"/>
+              <circle cx="16" cy="16" r="2.2" fill="currentColor"/>
+            </svg>
+          </div>
+
+          <div>
+            <h1 className="text-xl font-bold tracking-tight text-white">
+              FlowLedger
+            </h1>
+            <p className="text-xs text-gray-400">Personal & Work Cashflow</p>
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
