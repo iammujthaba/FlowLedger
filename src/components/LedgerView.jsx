@@ -377,7 +377,7 @@ export default function LedgerView({
           {borrowedInflow > 0 ? (
             <div className="text-[10px] text-gray-400 mt-2 pt-1.5 border-t border-gray-800/60 flex flex-col gap-0.5">
               <span className="truncate">Earned: <b className="text-emerald-400 font-mono">₹{earnedIncome.toLocaleString('en-IN')}</b></span>
-              <span className="truncate">Debt: <b className="text-rose-400 font-mono">₹{borrowedInflow.toLocaleString('en-IN')}</b></span>
+              <span className="truncate">Borrowed: <b className="text-rose-400 font-mono">₹{borrowedInflow.toLocaleString('en-IN')}</b></span>
             </div>
           ) : (
             <p className="text-[10px] text-gray-500 mt-2 pt-1.5 border-t border-gray-800/60">
@@ -442,7 +442,7 @@ export default function LedgerView({
                 : 'After all commitments'}
             </span>
             {borrowedInflow > 0 && (
-              <span className="text-amber-400 font-mono font-medium">(Covered by ₹{borrowedInflow.toLocaleString('en-IN')} debt)</span>
+              <span className="text-amber-400 font-mono font-medium">(Covered by ₹{borrowedInflow.toLocaleString('en-IN')} borrowed)</span>
             )}
           </div>
         </div>
