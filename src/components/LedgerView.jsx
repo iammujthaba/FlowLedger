@@ -2,6 +2,8 @@ import { useState, useMemo } from 'react';
 import { db } from '../db/db';
 import { syncService } from '../services/syncService';
 import CategoryIcon from './CategoryIcon';
+import AdvancedFilterModal from './AdvancedFilterModal';
+import { INITIAL_FILTERS } from '../constants/filterConstants';
 import { toIsoDate, formatDateHeader } from '../utils/dateUtils';
 import {
   ChevronLeft,
@@ -14,7 +16,8 @@ import {
   Calendar,
   User,
   Briefcase,
-  SlidersHorizontal
+  SlidersHorizontal,
+  X,
 } from 'lucide-react';
 
 export default function LedgerView({
@@ -29,6 +32,8 @@ export default function LedgerView({
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [sphereFilter, setSphereFilter] = useState('all'); // 'all' | 'personal' | 'work'
   const [searchQuery, setSearchQuery] = useState('');
+  const [filters, setFilters] = useState(INITIAL_FILTERS);
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
 
   // Liquid accounts and Total Liquid Balance
   const liquidAccounts = useMemo(() => {
@@ -114,21 +119,16 @@ export default function LedgerView({
     };
   }, [currentDate, timeframe]);
 
-  // Filter transactions for this timeframe and criteria
-  const filteredTransactions = useMemo(() => {
+  // Period transactions (strictly within date window and sphere filter)
+  // Powers the top overview cards (Total Inflow, Total Outflow, True Net Cashflow)
+  const periodTransactions = useMemo(() => {
     return transactions.filter((tx) => {
       const txDateStr = toIsoDate(tx.date, tx.updatedAt);
       if (txDateStr < startDateStr || txDateStr > endDateStr) return false;
       if (sphereFilter !== 'all' && tx.sphere !== sphereFilter) return false;
-      if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase();
-        const matchNote = tx.note && tx.note.toLowerCase().includes(query);
-        const matchCategory = tx.category && tx.category.toLowerCase().includes(query);
-        if (!matchNote && !matchCategory) return false;
-      }
       return true;
     });
-  }, [transactions, startDateStr, endDateStr, sphereFilter, searchQuery]);
+  }, [transactions, startDateStr, endDateStr, sphereFilter]);
 
   // Detailed metrics accounting for real earned income, borrowed debt, loans, and monthly EMI
   const {
@@ -163,7 +163,7 @@ export default function LedgerView({
     let pCount = 0;
     let wCount = 0;
 
-    filteredTransactions.forEach((tx) => {
+    periodTransactions.forEach((tx) => {
       const amt = Number(tx.amount) || 0;
       const cat = String(tx.category || '');
       const isLoanLinked = Boolean(tx.relatedLoanId);
@@ -210,8 +210,6 @@ export default function LedgerView({
 
     // True Operational Net Cashflow:
     // Real Earned Income - Living/Work Expenses - Net Money Lent - Monthly EMI
-    // (Note: Borrowed debt is NOT subtracted here because spending from borrowed debt is
-    // already counted in consumptionExp. This avoids double-penalizing the deficit).
     const trueNet = earnedInc - consumptionExp - netMoneyLent - pendingEmi;
 
     return {
@@ -231,18 +229,167 @@ export default function LedgerView({
       personalCount: pCount,
       workCount: wCount,
     };
-  }, [filteredTransactions, vault]);
+  }, [periodTransactions, vault]);
 
-  // Group transactions by date descending
+  // Active filter count
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (filters.nature !== 'all') count++;
+    if (filters.bank !== 'all') count++;
+    if (filters.category !== 'all') count++;
+    if (filters.dateScope !== 'period') {
+      if (filters.dateScope === 'all_time') count++;
+      else if (filters.dateScope === 'single' && filters.exactDate) count++;
+      else if (filters.dateScope === 'range' && (filters.startDate || filters.endDate)) count++;
+    }
+    if (filters.minAmount || filters.maxAmount) count++;
+    if (filters.sortBy !== 'date_desc') count++;
+    return count;
+  }, [filters]);
+
+  // Filtered transactions for the ledger view
+  const ledgerTransactions = useMemo(() => {
+    return transactions.filter((tx) => {
+      const txDateStr = toIsoDate(tx.date, tx.updatedAt);
+      const cat = String(tx.category || '');
+      const isLoanLinked = Boolean(tx.relatedLoanId);
+
+      // 1. Date Scope Filter
+      if (filters.dateScope === 'all_time') {
+        // No date constraint
+      } else if (filters.dateScope === 'single' && filters.exactDate) {
+        if (txDateStr !== filters.exactDate) return false;
+      } else if (filters.dateScope === 'range') {
+        if (filters.startDate && txDateStr < filters.startDate) return false;
+        if (filters.endDate && txDateStr > filters.endDate) return false;
+      } else {
+        // Default period constraint
+        if (txDateStr < startDateStr || txDateStr > endDateStr) return false;
+      }
+
+      // 2. Sphere Filter (All / Daily Life / Work)
+      if (sphereFilter !== 'all' && tx.sphere !== sphereFilter) return false;
+
+      // 3. Search Query
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        const matchNote = tx.note && tx.note.toLowerCase().includes(query);
+        const matchCategory = tx.category && tx.category.toLowerCase().includes(query);
+        const matchAmt = String(tx.amount).includes(query);
+        if (!matchNote && !matchCategory && !matchAmt) return false;
+      }
+
+      // 4. Nature Filter
+      if (filters.nature === 'earned') {
+        if (
+          tx.type !== 'income' ||
+          isLoanLinked ||
+          cat.includes('Borrowed') ||
+          cat.includes('Money Borrowed') ||
+          cat.includes('Repayment') ||
+          cat.includes('IOU')
+        ) {
+          return false;
+        }
+      } else if (filters.nature === 'borrowed') {
+        if (
+          tx.type !== 'income' ||
+          (!isLoanLinked && !cat.includes('Borrowed') && !cat.includes('Money Borrowed'))
+        ) {
+          return false;
+        }
+      } else if (filters.nature === 'all_income') {
+        if (tx.type !== 'income') return false;
+      } else if (filters.nature === 'personal_expense') {
+        if (
+          tx.type !== 'expense' ||
+          tx.sphere !== 'personal' ||
+          isLoanLinked ||
+          cat.includes('Money Lent') ||
+          cat.includes('Lent to')
+        ) {
+          return false;
+        }
+      } else if (filters.nature === 'work_expense') {
+        if (
+          tx.type !== 'expense' ||
+          tx.sphere !== 'work' ||
+          isLoanLinked ||
+          cat.includes('Money Lent') ||
+          cat.includes('Lent to')
+        ) {
+          return false;
+        }
+      } else if (filters.nature === 'money_lent') {
+        if (
+          tx.type !== 'expense' ||
+          (!isLoanLinked && !cat.includes('Money Lent') && !cat.includes('Lent to'))
+        ) {
+          return false;
+        }
+      } else if (filters.nature === 'all_expense') {
+        if (tx.type !== 'expense') return false;
+      }
+
+      // 5. Bank Account Filter
+      if (filters.bank !== 'all' && tx.account !== filters.bank) {
+        return false;
+      }
+
+      // 6. Category Filter
+      if (filters.category !== 'all' && tx.category !== filters.category) {
+        return false;
+      }
+
+      // 7. Amount Min/Max Range
+      const amt = Number(tx.amount);
+      if (filters.minAmount && amt < Number(filters.minAmount)) return false;
+      if (filters.maxAmount && amt > Number(filters.maxAmount)) return false;
+
+      return true;
+    });
+  }, [transactions, startDateStr, endDateStr, sphereFilter, searchQuery, filters]);
+
+  // Aggregate stats of filtered results
+  const filteredStats = useMemo(() => {
+    let inf = 0;
+    let outf = 0;
+    ledgerTransactions.forEach((tx) => {
+      const amt = Number(tx.amount) || 0;
+      if (tx.type === 'income') inf += amt;
+      else outf += amt;
+    });
+    return { inflow: inf, outflow: outf };
+  }, [ledgerTransactions]);
+
+  // Group transactions by date descending or user sort
   const groupedByDate = useMemo(() => {
-    const groups = {};
-    const sorted = [...filteredTransactions].sort((a, b) => {
+    const isAmountSort = filters.sortBy?.startsWith('amount');
+    const sorted = [...ledgerTransactions].sort((a, b) => {
+      if (filters.sortBy === 'amount_desc') {
+        return Number(b.amount) - Number(a.amount);
+      }
+      if (filters.sortBy === 'amount_asc') {
+        return Number(a.amount) - Number(b.amount);
+      }
+      if (filters.sortBy === 'date_asc') {
+        const aDate = toIsoDate(a.date, a.updatedAt);
+        const bDate = toIsoDate(b.date, b.updatedAt);
+        if (aDate !== bDate) return aDate.localeCompare(bDate);
+        return (a.updatedAt || '').localeCompare(b.updatedAt || '');
+      }
+      // default: date_desc
       const aDate = toIsoDate(a.date, a.updatedAt);
       const bDate = toIsoDate(b.date, b.updatedAt);
       if (aDate !== bDate) return bDate.localeCompare(aDate);
       return (b.updatedAt || '').localeCompare(a.updatedAt || '');
     });
 
+    if (isAmountSort) {
+      return [['Sorted by Amount', sorted]];
+    }
+
+    const groups = {};
     sorted.forEach((tx) => {
       const cleanKey = toIsoDate(tx.date, tx.updatedAt);
       if (!groups[cleanKey]) {
@@ -252,7 +399,41 @@ export default function LedgerView({
     });
 
     return Object.entries(groups);
-  }, [filteredTransactions]);
+  }, [ledgerTransactions, filters.sortBy]);
+
+  const handleResetFilters = () => {
+    setFilters(INITIAL_FILTERS);
+    setSearchQuery('');
+  };
+
+  const getNatureLabel = (n) => {
+    switch (n) {
+      case 'earned': return 'Earned Only';
+      case 'borrowed': return 'Borrowed (Debt)';
+      case 'all_income': return 'All Inflow';
+      case 'personal_expense': return 'Daily Life Exp';
+      case 'work_expense': return 'Work Exp';
+      case 'money_lent': return 'Money Lent';
+      case 'all_expense': return 'All Outflow';
+      default: return n;
+    }
+  };
+
+  const getDateScopeLabel = (f) => {
+    if (f.dateScope === 'all_time') return 'All Time';
+    if (f.dateScope === 'single') return `Date: ${f.exactDate || 'Selected'}`;
+    if (f.dateScope === 'range') return `${f.startDate || '...'} to ${f.endDate || '...'}`;
+    return 'Period';
+  };
+
+  const getSortLabel = (s) => {
+    switch (s) {
+      case 'date_asc': return 'Oldest First';
+      case 'amount_desc': return 'Highest Amount';
+      case 'amount_asc': return 'Lowest Amount';
+      default: return 'Newest First';
+    }
+  };
 
   const handleDelete = async (tx) => {
     const isLoanTx = Boolean(tx.relatedLoanId);
@@ -513,18 +694,174 @@ export default function LedgerView({
             </button>
           </div>
 
-          {/* Search */}
-          <div className="flex-1 relative">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search note or category..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 bg-[#0d111a] border border-gray-800 rounded-xl text-xs text-white placeholder-gray-400 outline-none focus:border-emerald-500 transition-all"
-            />
+          {/* Search & Filter Button */}
+          <div className="flex-1 flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search note, category, or amount..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-8 py-2 bg-[#0d111a] border border-gray-800 rounded-xl text-xs text-white placeholder-gray-400 outline-none focus:border-emerald-500 transition-all"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                  aria-label="Clear search"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Advanced Filter Button (matches Total Available Balance button styling) */}
+            <button
+              type="button"
+              onClick={() => setIsFilterModalOpen(true)}
+              className={`p-2 rounded-xl border transition-all shadow-sm active:scale-95 relative ${
+                activeFilterCount > 0
+                  ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-400 font-semibold'
+                  : 'bg-gray-850 hover:bg-gray-800 text-gray-300 hover:text-white border-gray-750'
+              }`}
+              title="Advanced Filter & Sort"
+              aria-label="Filter transactions"
+            >
+              <SlidersHorizontal className="w-4 h-4 text-emerald-400" />
+              {activeFilterCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 text-[9px] font-extrabold text-black flex items-center justify-center shadow-md">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
           </div>
         </div>
+
+        {/* Active Filter Chips Strip */}
+        {(activeFilterCount > 0 || searchQuery.trim()) && (
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+            <span className="text-[10px] text-gray-400 font-semibold shrink-0 uppercase tracking-wider">
+              Filters:
+            </span>
+
+            {searchQuery.trim() && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-gray-800 border border-gray-750 text-[10px] text-gray-300 font-medium shrink-0 hover:bg-gray-750"
+              >
+                <span>Search: &quot;{searchQuery}&quot;</span>
+                <X className="w-3 h-3 text-gray-400" />
+              </button>
+            )}
+
+            {filters.nature !== 'all' && (
+              <button
+                type="button"
+                onClick={() => setFilters((f) => ({ ...f, nature: 'all' }))}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-[10px] text-emerald-400 font-medium shrink-0 hover:bg-emerald-500/20"
+              >
+                <span>{getNatureLabel(filters.nature)}</span>
+                <X className="w-3 h-3" />
+              </button>
+            )}
+
+            {filters.bank !== 'all' && (
+              <button
+                type="button"
+                onClick={() => setFilters((f) => ({ ...f, bank: 'all' }))}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-500/10 border border-blue-500/30 text-[10px] text-blue-400 font-medium shrink-0 hover:bg-blue-500/20"
+              >
+                <span>Bank: {accountMap.get(filters.bank)?.shortName || filters.bank.toUpperCase()}</span>
+                <X className="w-3 h-3" />
+              </button>
+            )}
+
+            {filters.dateScope !== 'period' && (
+              <button
+                type="button"
+                onClick={() => setFilters((f) => ({ ...f, dateScope: 'period', exactDate: '', startDate: '', endDate: '' }))}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[10px] text-amber-400 font-medium shrink-0 hover:bg-amber-500/20"
+              >
+                <span>{getDateScopeLabel(filters)}</span>
+                <X className="w-3 h-3" />
+              </button>
+            )}
+
+            {filters.category !== 'all' && (
+              <button
+                type="button"
+                onClick={() => setFilters((f) => ({ ...f, category: 'all' }))}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-pink-500/10 border border-pink-500/30 text-[10px] text-pink-400 font-medium shrink-0 hover:bg-pink-500/20"
+              >
+                <span>{filters.category}</span>
+                <X className="w-3 h-3" />
+              </button>
+            )}
+
+            {(filters.minAmount || filters.maxAmount) && (
+              <button
+                type="button"
+                onClick={() => setFilters((f) => ({ ...f, minAmount: '', maxAmount: '' }))}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-purple-500/10 border border-purple-500/30 text-[10px] text-purple-400 font-medium shrink-0 hover:bg-purple-500/20"
+              >
+                <span>
+                  {filters.minAmount && filters.maxAmount
+                    ? `₹${filters.minAmount} - ₹${filters.maxAmount}`
+                    : filters.minAmount
+                    ? `≥ ₹${filters.minAmount}`
+                    : `≤ ₹${filters.maxAmount}`}
+                </span>
+                <X className="w-3 h-3" />
+              </button>
+            )}
+
+            {filters.sortBy !== 'date_desc' && (
+              <button
+                type="button"
+                onClick={() => setFilters((f) => ({ ...f, sortBy: 'date_desc' }))}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-gray-800 border border-gray-700 text-[10px] text-gray-300 font-medium shrink-0 hover:bg-gray-750"
+              >
+                <span>Sort: {getSortLabel(filters.sortBy)}</span>
+                <X className="w-3 h-3" />
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={handleResetFilters}
+              className="text-[10px] text-rose-400/80 hover:text-rose-400 font-semibold px-1.5 py-0.5 shrink-0"
+            >
+              Clear All
+            </button>
+          </div>
+        )}
+
+        {/* Filtered Results Summary Bar */}
+        {(activeFilterCount > 0 || searchQuery.trim()) && (
+          <div className="bg-[#0d111a] border border-gray-800 rounded-2xl p-3 flex items-center justify-between shadow-sm">
+            <span className="text-xs text-gray-400">
+              Found <b className="text-white font-mono">{ledgerTransactions.length}</b> {ledgerTransactions.length === 1 ? 'item' : 'items'}
+            </span>
+            <div className="flex items-center gap-2.5 font-mono text-xs">
+              {filteredStats.inflow > 0 && (
+                <span className="text-emerald-400 font-semibold">
+                  Inflow: +₹{filteredStats.inflow.toLocaleString('en-IN')}
+                </span>
+              )}
+              {filteredStats.outflow > 0 && (
+                <span className="text-rose-400 font-semibold">
+                  Outflow: -₹{filteredStats.outflow.toLocaleString('en-IN')}
+                </span>
+              )}
+              {filteredStats.inflow === 0 && filteredStats.outflow === 0 && (
+                <span className="text-gray-500 font-mono">₹0</span>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Contextual Banner when filtered by Daily Life or Work */}
         {sphereFilter === 'personal' ? (
@@ -568,10 +905,24 @@ export default function LedgerView({
       {groupedByDate.length === 0 ? (
         <div className="text-center py-12 bg-[#0d111a] rounded-2xl border border-gray-800">
           <Calendar className="w-10 h-10 mx-auto text-gray-700 mb-2" />
-          <p className="text-sm font-semibold text-gray-400">No transactions recorded</p>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Tap the + button to log an expense or income
+          <p className="text-sm font-semibold text-gray-400">
+            {activeFilterCount > 0 || searchQuery.trim()
+              ? 'No matching transactions found'
+              : 'No transactions recorded'}
           </p>
+          <div className="text-xs text-gray-500 mt-1">
+            {activeFilterCount > 0 || searchQuery.trim() ? (
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                className="text-emerald-400 hover:underline font-semibold"
+              >
+                Clear all filters
+              </button>
+            ) : (
+              'Tap the + button to log an expense or income'
+            )}
+          </div>
         </div>
       ) : (
         <div className="space-y-4">
@@ -685,6 +1036,18 @@ export default function LedgerView({
           ))}
         </div>
       )}
+
+      {/* Advanced Filter & Sort Modal */}
+      <AdvancedFilterModal
+        key={isFilterModalOpen ? 'filter-modal-open' : 'filter-modal-closed'}
+        isOpen={isFilterModalOpen}
+        onClose={() => setIsFilterModalOpen(false)}
+        filters={filters}
+        onApplyFilters={(newFilters) => setFilters(newFilters)}
+        onResetFilters={handleResetFilters}
+        accounts={accounts}
+        categories={categories}
+      />
     </div>
   );
 }
