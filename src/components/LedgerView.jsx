@@ -231,6 +231,50 @@ export default function LedgerView({
     };
   }, [periodTransactions, vault]);
 
+  // Insight for True Net Cashflow
+  const cashflowInsight = useMemo(() => {
+    const overspentBeyondEarned = consumptionExpense - earnedIncome;
+
+    if (overspentBeyondEarned > 0) {
+      if (pendingEmiObligation > 0) {
+        return (
+          <span>
+            Spent <b className="text-rose-400 font-mono">₹{overspentBeyondEarned.toLocaleString('en-IN')}</b> more than earned, plus <b className="text-amber-400 font-mono">₹{pendingEmiObligation.toLocaleString('en-IN')}</b> EMI obligation
+          </span>
+        );
+      } else if (hasPaidEmiInPeriod) {
+        return (
+          <span>
+            Spent <b className="text-rose-400 font-mono">₹{overspentBeyondEarned.toLocaleString('en-IN')}</b> more than earned (EMI already paid)
+          </span>
+        );
+      } else {
+        return (
+          <span>
+            Spent <b className="text-rose-400 font-mono">₹{overspentBeyondEarned.toLocaleString('en-IN')}</b> more than real earned income
+          </span>
+        );
+      }
+    } else {
+      const savedFromSpending = earnedIncome - consumptionExpense;
+      if (trueNetCashflow < 0) {
+        return (
+          <span>
+            Saved <b className="text-emerald-400 font-mono">₹{savedFromSpending.toLocaleString('en-IN')}</b> from spending, but <b className="text-amber-400 font-mono">₹{pendingEmiObligation.toLocaleString('en-IN')}</b> EMI creates a deficit
+          </span>
+        );
+      } else if (trueNetCashflow > 0) {
+        return (
+          <span>
+            Saved <b className="text-emerald-400 font-mono">+₹{trueNetCashflow.toLocaleString('en-IN')}</b> after all living expenses {pendingEmiObligation > 0 || hasPaidEmiInPeriod ? '& EMI commitment' : ''}
+          </span>
+        );
+      } else {
+        return <span>Balanced: Earned income matches all expenses & commitments</span>;
+      }
+    }
+  }, [consumptionExpense, earnedIncome, pendingEmiObligation, hasPaidEmiInPeriod, trueNetCashflow]);
+
   // Active filter count
   const activeFilterCount = useMemo(() => {
     let count = 0;
@@ -640,17 +684,8 @@ export default function LedgerView({
               {trueNetCashflow >= 0 ? '+' : ''}₹{trueNetCashflow.toLocaleString('en-IN')}
             </p>
           </div>
-          <div className="text-[10px] text-gray-400 mt-2 pt-1.5 border-t border-gray-800/60 flex items-center justify-between flex-wrap gap-1">
-            <span>
-              {pendingEmiObligation > 0
-                ? `Includes ₹${pendingEmiObligation.toLocaleString('en-IN')} EMI (Ded. 2nd)`
-                : hasPaidEmiInPeriod
-                ? 'EMI Paid (Ded. 2nd)'
-                : 'After all commitments'}
-            </span>
-            {borrowedInflow > 0 && (
-              <span className="text-amber-400 font-mono font-medium">(Covered by ₹{borrowedInflow.toLocaleString('en-IN')} borrowed)</span>
-            )}
+          <div className="text-[11px] text-gray-400 mt-2 pt-1.5 border-t border-gray-800/60 leading-relaxed">
+            {cashflowInsight}
           </div>
         </div>
       </div>
