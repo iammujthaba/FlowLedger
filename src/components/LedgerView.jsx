@@ -383,18 +383,21 @@ export default function LedgerView({
             </p>
           </div>
           {borrowedInflow > 0 ? (
-            <div className="text-[10px] text-gray-400 mt-2 pt-1.5 border-t border-gray-800/60 flex flex-col gap-0.5">
-              <span className="truncate">
-                Earned: <b className="text-emerald-400 font-mono">₹{earnedIncome.toLocaleString('en-IN')}</b> <span className="text-[9px] text-gray-500">({earnedCount} {earnedCount === 1 ? 'item' : 'items'})</span>
-              </span>
-              <span className="truncate">
-                Borrowed: <b className="text-rose-400 font-mono">₹{borrowedInflow.toLocaleString('en-IN')}</b> <span className="text-[9px] text-gray-500">({borrowedCount} {borrowedCount === 1 ? 'item' : 'items'})</span>
-              </span>
+            <div className="text-[10px] text-gray-400 mt-2 pt-1.5 border-t border-gray-800/60 flex flex-col gap-1">
+              <div className="flex items-center justify-between">
+                <span className="truncate">Earned: <b className="text-emerald-400 font-mono">₹{earnedIncome.toLocaleString('en-IN')}</b></span>
+                <span className="text-[9px] text-gray-500 font-mono shrink-0 ml-1.5">{earnedCount} {earnedCount === 1 ? 'item' : 'items'}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="truncate">Borrowed: <b className="text-rose-400 font-mono">₹{borrowedInflow.toLocaleString('en-IN')}</b></span>
+                <span className="text-[9px] text-gray-500 font-mono shrink-0 ml-1.5">{borrowedCount} {borrowedCount === 1 ? 'item' : 'items'}</span>
+              </div>
             </div>
           ) : (
-            <p className="text-[10px] text-gray-500 mt-2 pt-1.5 border-t border-gray-800/60">
-              100% Real Earned Income <span className="text-[9px] text-gray-500">({earnedCount} {earnedCount === 1 ? 'item' : 'items'})</span>
-            </p>
+            <div className="text-[10px] text-gray-500 mt-2 pt-1.5 border-t border-gray-800/60 flex items-center justify-between">
+              <span className="truncate">100% Real Earned Income</span>
+              <span className="text-[9px] text-gray-500 font-mono shrink-0 ml-1.5">{earnedCount} {earnedCount === 1 ? 'item' : 'items'}</span>
+            </div>
           )}
         </div>
 
@@ -410,14 +413,25 @@ export default function LedgerView({
             </p>
           </div>
           {moneyLentOut > 0 ? (
-            <div className="text-[10px] text-gray-400 mt-2 pt-1.5 border-t border-gray-800/60 flex flex-col gap-0.5">
-              <span className="truncate">Spent: <b className="text-white font-mono">₹{consumptionExpense.toLocaleString('en-IN')}</b> <span className="text-[9px] text-gray-500">({personalCount + workCount} items)</span></span>
-              <span className="truncate">Lent: <b className="text-purple-400 font-mono">₹{moneyLentOut.toLocaleString('en-IN')}</b></span>
+            <div className="text-[10px] text-gray-400 mt-2 pt-1.5 border-t border-gray-800/60 flex flex-col gap-1">
+              <div className="flex items-center justify-between">
+                <span className="truncate">Spent: <b className="text-white font-mono">₹{consumptionExpense.toLocaleString('en-IN')}</b></span>
+                <span className="text-[9px] text-gray-500 font-mono shrink-0 ml-1.5">{personalCount + workCount} items</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="truncate">Lent: <b className="text-purple-400 font-mono">₹{moneyLentOut.toLocaleString('en-IN')}</b></span>
+              </div>
             </div>
           ) : (
-            <div className="text-[10px] text-gray-400 mt-2 pt-1.5 border-t border-gray-800/60 flex flex-col gap-0.5">
-              <span className="truncate">Daily: <b className="text-emerald-400/90 font-mono">₹{personalExpense.toLocaleString('en-IN')}</b> <span className="text-[9px] text-gray-500">({personalCount} {personalCount === 1 ? 'item' : 'items'})</span></span>
-              <span className="truncate">Work: <b className="text-blue-400/90 font-mono">₹{workExpense.toLocaleString('en-IN')}</b> <span className="text-[9px] text-gray-500">({workCount} {workCount === 1 ? 'item' : 'items'})</span></span>
+            <div className="text-[10px] text-gray-400 mt-2 pt-1.5 border-t border-gray-800/60 flex flex-col gap-1">
+              <div className="flex items-center justify-between">
+                <span className="truncate">Daily: <b className="text-emerald-400/90 font-mono">₹{personalExpense.toLocaleString('en-IN')}</b></span>
+                <span className="text-[9px] text-gray-500 font-mono shrink-0 ml-1.5">{personalCount} {personalCount === 1 ? 'item' : 'items'}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="truncate">Work: <b className="text-blue-400/90 font-mono">₹{workExpense.toLocaleString('en-IN')}</b></span>
+                <span className="text-[9px] text-gray-500 font-mono shrink-0 ml-1.5">{workCount} {workCount === 1 ? 'item' : 'items'}</span>
+              </div>
             </div>
           )}
         </div>
