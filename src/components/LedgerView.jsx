@@ -153,7 +153,6 @@ export default function LedgerView({
     let lentRepayInc = 0;
     let consumptionExp = 0;
     let lentExp = 0;
-    let debtRepaidExp = 0;
     let hasEmiPaid = false;
     let personalExp = 0;
     let workExp = 0;
@@ -177,7 +176,7 @@ export default function LedgerView({
       } else {
         expense += amt;
         if (cat.includes('Debt Repaid') || cat.includes('Repaid debt')) {
-          debtRepaidExp += amt;
+          // debt repaid tracking
         } else if (isLoanLinked || cat.includes('Money Lent') || cat.includes('Lent to')) {
           lentExp += amt;
         } else {
@@ -200,13 +199,14 @@ export default function LedgerView({
     const emiMonthlyAmount = Number(vault?.bajaj_emi?.monthlyAmount ?? 1750);
     const pendingEmi = hasEmiPaid ? 0 : emiMonthlyAmount;
 
-    // Net debt taken in this period
-    const netDebtTaken = Math.max(0, borrowedInc - debtRepaidExp);
-    // Net money lent out in this period
+    // Net money lent out in this period (money that left your wallet as loans to others)
     const netMoneyLent = Math.max(0, lentExp - lentRepayInc);
 
-    // True Net Cashflow = Real Earned Income - Living/Work Expenses - Net Debt Taken - Net Money Lent - Pending EMI
-    const trueNet = earnedInc - consumptionExp - netDebtTaken - netMoneyLent - pendingEmi;
+    // True Operational Net Cashflow:
+    // Real Earned Income - Living/Work Expenses - Net Money Lent - Monthly EMI
+    // (Note: Borrowed debt is NOT subtracted here because spending from borrowed debt is
+    // already counted in consumptionExp. This avoids double-penalizing the deficit).
+    const trueNet = earnedInc - consumptionExp - netMoneyLent - pendingEmi;
 
     return {
       totalIncome: income,
@@ -364,7 +364,7 @@ export default function LedgerView({
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {/* Total Inflow */}
-        <div className="bg-[#0d111a] border border-gray-800/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
+        <div className="bg-[#0d111a] border border-gray-800/80 rounded-2xl p-3.5 sm:p-4 shadow-sm flex flex-col justify-between">
           <div>
             <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-400">
               <ArrowDownRight className="w-4 h-4" />
@@ -375,18 +375,19 @@ export default function LedgerView({
             </p>
           </div>
           {borrowedInflow > 0 ? (
-            <p className="text-[10px] text-gray-400 mt-2 pt-1.5 border-t border-gray-800/60 truncate">
-              Earned: <b className="text-emerald-400 font-mono">₹{earnedIncome.toLocaleString('en-IN')}</b> • Debt: <b className="text-rose-400 font-mono">₹{borrowedInflow.toLocaleString('en-IN')}</b>
-            </p>
+            <div className="text-[10px] text-gray-400 mt-2 pt-1.5 border-t border-gray-800/60 flex flex-col gap-0.5">
+              <span className="truncate">Earned: <b className="text-emerald-400 font-mono">₹{earnedIncome.toLocaleString('en-IN')}</b></span>
+              <span className="truncate">Debt: <b className="text-rose-400 font-mono">₹{borrowedInflow.toLocaleString('en-IN')}</b></span>
+            </div>
           ) : (
             <p className="text-[10px] text-gray-500 mt-2 pt-1.5 border-t border-gray-800/60">
-              Real Earned Income
+              100% Real Earned Income
             </p>
           )}
         </div>
 
         {/* Total Outflow */}
-        <div className="bg-[#0d111a] border border-gray-800/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
+        <div className="bg-[#0d111a] border border-gray-800/80 rounded-2xl p-3.5 sm:p-4 shadow-sm flex flex-col justify-between">
           <div>
             <div className="flex items-center gap-1.5 text-xs font-semibold text-rose-400">
               <ArrowUpRight className="w-4 h-4" />
@@ -397,18 +398,20 @@ export default function LedgerView({
             </p>
           </div>
           {moneyLentOut > 0 ? (
-            <p className="text-[10px] text-gray-400 mt-2 pt-1.5 border-t border-gray-800/60 truncate">
-              Spent: <b className="text-white font-mono">₹{consumptionExpense.toLocaleString('en-IN')}</b> • Lent: <b className="text-purple-400 font-mono">₹{moneyLentOut.toLocaleString('en-IN')}</b>
-            </p>
+            <div className="text-[10px] text-gray-400 mt-2 pt-1.5 border-t border-gray-800/60 flex flex-col gap-0.5">
+              <span className="truncate">Spent: <b className="text-white font-mono">₹{consumptionExpense.toLocaleString('en-IN')}</b></span>
+              <span className="truncate">Lent: <b className="text-purple-400 font-mono">₹{moneyLentOut.toLocaleString('en-IN')}</b></span>
+            </div>
           ) : (
-            <p className="text-[10px] text-gray-500 mt-2 pt-1.5 border-t border-gray-800/60">
-              Daily Life & Work Expenses
-            </p>
+            <div className="text-[10px] text-gray-400 mt-2 pt-1.5 border-t border-gray-800/60 flex flex-col gap-0.5">
+              <span className="truncate">Daily: <b className="text-emerald-400/90 font-mono">₹{personalExpense.toLocaleString('en-IN')}</b></span>
+              <span className="truncate">Work: <b className="text-blue-400/90 font-mono">₹{workExpense.toLocaleString('en-IN')}</b></span>
+            </div>
           )}
         </div>
 
         {/* True Net Cashflow */}
-        <div className="col-span-2 sm:col-span-1 bg-[#0d111a] border border-gray-800/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
+        <div className="col-span-2 sm:col-span-1 bg-[#0d111a] border border-gray-800/80 rounded-2xl p-3.5 sm:p-4 shadow-sm flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between text-xs font-semibold text-gray-400">
               <span>True Net Cashflow</span>
@@ -436,10 +439,10 @@ export default function LedgerView({
                 ? `Includes ₹${pendingEmiObligation.toLocaleString('en-IN')} EMI (Ded. 2nd)`
                 : hasPaidEmiInPeriod
                 ? 'EMI Paid (Ded. 2nd)'
-                : 'After all debt & commitments'}
+                : 'After all commitments'}
             </span>
             {borrowedInflow > 0 && (
-              <span className="text-rose-400 font-mono font-medium">(-₹{borrowedInflow.toLocaleString('en-IN')} debt)</span>
+              <span className="text-amber-400 font-mono font-medium">(Covered by ₹{borrowedInflow.toLocaleString('en-IN')} debt)</span>
             )}
           </div>
         </div>

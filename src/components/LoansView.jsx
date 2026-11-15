@@ -383,13 +383,11 @@ export default function LoansView({ loans = [], accounts = [] }) {
                     </div>
 
                     <div className="flex items-center flex-wrap gap-2 text-xs text-gray-400 mt-1">
-                      <span>Given on: {formatDateLabel(loan.date)}</span>
+                      <span>{loan.type === 'borrowed' ? 'Borrowed on:' : 'Lent on:'} {formatDateLabel(loan.date)}</span>
                       {loan.dueDate && <span>• Due: {formatDateLabel(loan.dueDate)}</span>}
-                      {loanAcc && (
-                        <span className="text-[10px] text-gray-400 px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700">
-                          {loanAcc.shortName || loanAcc.name}
-                        </span>
-                      )}
+                      <span className="text-[10px] text-gray-400 px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700">
+                        {loanAcc ? (loanAcc.shortName || loanAcc.name) : (loan.account ? loan.account.toUpperCase() : (loan.type === 'borrowed' ? 'SIB' : 'KGB'))}
+                      </span>
                     </div>
 
                     {loan.notes && (
