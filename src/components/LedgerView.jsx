@@ -143,6 +143,8 @@ export default function LedgerView({
     trueNetCashflow,
     personalExpense,
     workExpense,
+    earnedCount,
+    borrowedCount,
     personalCount,
     workCount,
   } = useMemo(() => {
@@ -156,6 +158,8 @@ export default function LedgerView({
     let hasEmiPaid = false;
     let personalExp = 0;
     let workExp = 0;
+    let eCount = 0;
+    let bCount = 0;
     let pCount = 0;
     let wCount = 0;
 
@@ -170,8 +174,10 @@ export default function LedgerView({
           lentRepayInc += amt;
         } else if (isLoanLinked || cat.includes('Borrowed') || cat.includes('Money Borrowed')) {
           borrowedInc += amt;
+          bCount++;
         } else {
           earnedInc += amt;
+          eCount++;
         }
       } else {
         expense += amt;
@@ -220,6 +226,8 @@ export default function LedgerView({
       trueNetCashflow: trueNet,
       personalExpense: personalExp,
       workExpense: workExp,
+      earnedCount: eCount,
+      borrowedCount: bCount,
       personalCount: pCount,
       workCount: wCount,
     };
@@ -376,12 +384,16 @@ export default function LedgerView({
           </div>
           {borrowedInflow > 0 ? (
             <div className="text-[10px] text-gray-400 mt-2 pt-1.5 border-t border-gray-800/60 flex flex-col gap-0.5">
-              <span className="truncate">Earned: <b className="text-emerald-400 font-mono">₹{earnedIncome.toLocaleString('en-IN')}</b></span>
-              <span className="truncate">Borrowed: <b className="text-rose-400 font-mono">₹{borrowedInflow.toLocaleString('en-IN')}</b></span>
+              <span className="truncate">
+                Earned: <b className="text-emerald-400 font-mono">₹{earnedIncome.toLocaleString('en-IN')}</b> <span className="text-[9px] text-gray-500">({earnedCount} {earnedCount === 1 ? 'item' : 'items'})</span>
+              </span>
+              <span className="truncate">
+                Borrowed: <b className="text-rose-400 font-mono">₹{borrowedInflow.toLocaleString('en-IN')}</b> <span className="text-[9px] text-gray-500">({borrowedCount} {borrowedCount === 1 ? 'item' : 'items'})</span>
+              </span>
             </div>
           ) : (
             <p className="text-[10px] text-gray-500 mt-2 pt-1.5 border-t border-gray-800/60">
-              100% Real Earned Income
+              100% Real Earned Income <span className="text-[9px] text-gray-500">({earnedCount} {earnedCount === 1 ? 'item' : 'items'})</span>
             </p>
           )}
         </div>
