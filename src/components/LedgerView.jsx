@@ -926,17 +926,38 @@ export default function LedgerView({
         </div>
       ) : (
         <div className="space-y-4">
-          {groupedByDate.map(([dateKey, txList]) => (
-            <div key={dateKey} className="space-y-2">
-              {/* Date Header */}
-              <div className="flex items-center justify-between px-1">
-                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
-                  {formatDateHeader(dateKey)}
-                </span>
-                <span className="text-xs font-mono font-medium text-gray-500">
-                  {txList.length} {txList.length === 1 ? 'item' : 'items'}
-                </span>
-              </div>
+          {groupedByDate.map(([dateKey, txList]) => {
+            let dayInflow = 0;
+            let dayOutflow = 0;
+            txList.forEach((tx) => {
+              const amt = Number(tx.amount) || 0;
+              if (tx.type === 'income') dayInflow += amt;
+              else dayOutflow += amt;
+            });
+
+            return (
+              <div key={dateKey} className="space-y-2">
+                {/* Date Header with Day's Total Sum & Items Count */}
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-xs font-bold text-gray-400 uppercase tracking-wider truncate mr-2">
+                    {formatDateHeader(dateKey)}
+                  </span>
+                  <div className="flex items-center gap-1.5 font-mono shrink-0 text-xs">
+                    {dayInflow > 0 && (
+                      <span className="text-emerald-400 font-bold">
+                        +₹{dayInflow.toLocaleString('en-IN')}
+                      </span>
+                    )}
+                    {dayOutflow > 0 && (
+                      <span className="text-rose-400 font-bold">
+                        -₹{dayOutflow.toLocaleString('en-IN')}
+                      </span>
+                    )}
+                    <span className="text-gray-500 text-[11px]">
+                      • {txList.length} {txList.length === 1 ? 'item' : 'items'}
+                    </span>
+                  </div>
+                </div>
 
               {/* Transactions in this date */}
               <div className="bg-[#0d111a] border border-gray-800/80 rounded-2xl divide-y divide-gray-800/60 overflow-hidden shadow-sm">
@@ -1033,7 +1054,8 @@ export default function LedgerView({
                 })}
               </div>
             </div>
-          ))}
+          );
+        })}
         </div>
       )}
 

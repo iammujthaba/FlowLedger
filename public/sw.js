@@ -1,4 +1,4 @@
-const CACHE_NAME = 'flowledger-v13';
+const CACHE_NAME = 'flowledger-v14';
 const STATIC_ASSETS = [
   './',
   './index.html',
