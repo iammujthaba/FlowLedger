@@ -399,13 +399,13 @@ export default function LedgerView({
           </div>
           {moneyLentOut > 0 ? (
             <div className="text-[10px] text-gray-400 mt-2 pt-1.5 border-t border-gray-800/60 flex flex-col gap-0.5">
-              <span className="truncate">Spent: <b className="text-white font-mono">₹{consumptionExpense.toLocaleString('en-IN')}</b></span>
+              <span className="truncate">Spent: <b className="text-white font-mono">₹{consumptionExpense.toLocaleString('en-IN')}</b> <span className="text-[9px] text-gray-500">({personalCount + workCount} items)</span></span>
               <span className="truncate">Lent: <b className="text-purple-400 font-mono">₹{moneyLentOut.toLocaleString('en-IN')}</b></span>
             </div>
           ) : (
             <div className="text-[10px] text-gray-400 mt-2 pt-1.5 border-t border-gray-800/60 flex flex-col gap-0.5">
-              <span className="truncate">Daily: <b className="text-emerald-400/90 font-mono">₹{personalExpense.toLocaleString('en-IN')}</b></span>
-              <span className="truncate">Work: <b className="text-blue-400/90 font-mono">₹{workExpense.toLocaleString('en-IN')}</b></span>
+              <span className="truncate">Daily: <b className="text-emerald-400/90 font-mono">₹{personalExpense.toLocaleString('en-IN')}</b> <span className="text-[9px] text-gray-500">({personalCount} {personalCount === 1 ? 'item' : 'items'})</span></span>
+              <span className="truncate">Work: <b className="text-blue-400/90 font-mono">₹{workExpense.toLocaleString('en-IN')}</b> <span className="text-[9px] text-gray-500">({workCount} {workCount === 1 ? 'item' : 'items'})</span></span>
             </div>
           )}
         </div>
@@ -500,42 +500,8 @@ export default function LedgerView({
           </div>
         </div>
 
-        {/* Organized Sub-Cards Under Filter: Contextual Breakdown */}
-        {sphereFilter === 'all' ? (
-          <div className="grid grid-cols-2 gap-2.5">
-            {/* Daily Life Card */}
-            <div className="bg-[#0d111a] border border-gray-800/80 rounded-2xl p-3 shadow-sm">
-              <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
-                <span className="flex items-center gap-1.5 font-medium text-emerald-400">
-                  <User className="w-3.5 h-3.5" />
-                  <span>Daily Life</span>
-                </span>
-                <span className="text-[11px] text-gray-500 font-mono">
-                  {personalCount} {personalCount === 1 ? 'item' : 'items'}
-                </span>
-              </div>
-              <p className="text-lg font-bold font-mono text-white">
-                ₹{personalExpense.toLocaleString('en-IN')}
-              </p>
-            </div>
-
-            {/* Work Card */}
-            <div className="bg-[#0d111a] border border-gray-800/80 rounded-2xl p-3 shadow-sm">
-              <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
-                <span className="flex items-center gap-1.5 font-medium text-blue-400">
-                  <Briefcase className="w-3.5 h-3.5" />
-                  <span>Work-Related</span>
-                </span>
-                <span className="text-[11px] text-gray-500 font-mono">
-                  {workCount} {workCount === 1 ? 'item' : 'items'}
-                </span>
-              </div>
-              <p className="text-lg font-bold font-mono text-white">
-                ₹{workExpense.toLocaleString('en-IN')}
-              </p>
-            </div>
-          </div>
-        ) : sphereFilter === 'personal' ? (
+        {/* Contextual Banner when filtered by Daily Life or Work */}
+        {sphereFilter === 'personal' ? (
           <div className="bg-[#0d111a] border border-emerald-500/25 rounded-2xl p-3 flex items-center justify-between shadow-sm">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
@@ -552,7 +518,7 @@ export default function LedgerView({
               ₹{personalExpense.toLocaleString('en-IN')}
             </p>
           </div>
-        ) : (
+        ) : sphereFilter === 'work' ? (
           <div className="bg-[#0d111a] border border-blue-500/25 rounded-2xl p-3 flex items-center justify-between shadow-sm">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center">
@@ -569,7 +535,7 @@ export default function LedgerView({
               ₹{workExpense.toLocaleString('en-IN')}
             </p>
           </div>
-        )}
+        ) : null}
       </div>
 
       {/* Transaction List */}
