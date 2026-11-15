@@ -945,7 +945,7 @@ export default function LedgerView({
                   <div className="flex items-center gap-1.5 font-mono shrink-0 text-xs text-gray-400">
                     {dayInflow > 0 && (
                       <span className="font-medium">
-                        +₹{dayInflow.toLocaleString('en-IN')}
+                        +₹{dayInflow.toLocaleString('en-IN')}{dayOutflow > 0 ? ',' : ''}
                       </span>
                     )}
                     {dayOutflow > 0 && (
