@@ -21,6 +21,7 @@ export default function LedgerView({
   transactions = [],
   categories = [],
   accounts = [],
+  vault = {},
   onEditTransaction,
   onOpenAdjustBalances
 }) {
@@ -129,10 +130,31 @@ export default function LedgerView({
     });
   }, [transactions, startDateStr, endDateStr, sphereFilter, searchQuery]);
 
-  // Aggregate metrics
-  const { totalIncome, totalExpense, personalExpense, workExpense, personalCount, workCount } = useMemo(() => {
+  // Detailed metrics accounting for real earned income, borrowed debt, loans, and monthly EMI
+  const {
+    totalIncome,
+    totalExpense,
+    earnedIncome,
+    borrowedInflow,
+    consumptionExpense,
+    moneyLentOut,
+    hasPaidEmiInPeriod,
+    pendingEmiObligation,
+    trueNetCashflow,
+    personalExpense,
+    workExpense,
+    personalCount,
+    workCount,
+  } = useMemo(() => {
     let income = 0;
     let expense = 0;
+    let earnedInc = 0;
+    let borrowedInc = 0;
+    let lentRepayInc = 0;
+    let consumptionExp = 0;
+    let lentExp = 0;
+    let debtRepaidExp = 0;
+    let hasEmiPaid = false;
     let personalExp = 0;
     let workExp = 0;
     let pCount = 0;
@@ -140,31 +162,68 @@ export default function LedgerView({
 
     filteredTransactions.forEach((tx) => {
       const amt = Number(tx.amount) || 0;
+      const cat = String(tx.category || '');
+      const isLoanLinked = Boolean(tx.relatedLoanId);
+
       if (tx.type === 'income') {
         income += amt;
+        if (cat.includes('Repayment') || cat.includes('IOU Repayment')) {
+          lentRepayInc += amt;
+        } else if (isLoanLinked || cat.includes('Borrowed') || cat.includes('Money Borrowed')) {
+          borrowedInc += amt;
+        } else {
+          earnedInc += amt;
+        }
       } else {
         expense += amt;
-        if (tx.sphere === 'personal') {
-          personalExp += amt;
-          pCount++;
-        } else if (tx.sphere === 'work') {
-          workExp += amt;
-          wCount++;
+        if (cat.includes('Debt Repaid') || cat.includes('Repaid debt')) {
+          debtRepaidExp += amt;
+        } else if (isLoanLinked || cat.includes('Money Lent') || cat.includes('Lent to')) {
+          lentExp += amt;
+        } else {
+          consumptionExp += amt;
+          if (cat.includes('Bajaj Finance EMI') || cat.includes('EMI')) {
+            hasEmiPaid = true;
+          }
+          if (tx.sphere === 'personal') {
+            personalExp += amt;
+            pCount++;
+          } else if (tx.sphere === 'work') {
+            workExp += amt;
+            wCount++;
+          }
         }
       }
     });
 
+    // Monthly EMI commitment (Bajaj Finance ₹1,750 deducted on 2nd of each month)
+    const emiMonthlyAmount = Number(vault?.bajaj_emi?.monthlyAmount ?? 1750);
+    const pendingEmi = hasEmiPaid ? 0 : emiMonthlyAmount;
+
+    // Net debt taken in this period
+    const netDebtTaken = Math.max(0, borrowedInc - debtRepaidExp);
+    // Net money lent out in this period
+    const netMoneyLent = Math.max(0, lentExp - lentRepayInc);
+
+    // True Net Cashflow = Real Earned Income - Living/Work Expenses - Net Debt Taken - Net Money Lent - Pending EMI
+    const trueNet = earnedInc - consumptionExp - netDebtTaken - netMoneyLent - pendingEmi;
+
     return {
       totalIncome: income,
       totalExpense: expense,
+      earnedIncome: earnedInc,
+      borrowedInflow: borrowedInc,
+      consumptionExpense: consumptionExp,
+      moneyLentOut: lentExp,
+      hasPaidEmiInPeriod: hasEmiPaid,
+      pendingEmiObligation: pendingEmi,
+      trueNetCashflow: trueNet,
       personalExpense: personalExp,
       workExpense: workExp,
       personalCount: pCount,
       workCount: wCount,
     };
-  }, [filteredTransactions]);
-
-  const netSavings = totalIncome - totalExpense;
+  }, [filteredTransactions, vault]);
 
   // Group transactions by date descending
   const groupedByDate = useMemo(() => {
@@ -305,39 +364,84 @@ export default function LedgerView({
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {/* Total Inflow */}
-        <div className="bg-[#0d111a] border border-gray-800/80 rounded-2xl p-4 shadow-sm">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-400">
-            <ArrowDownRight className="w-4 h-4" />
-            <span>Total Inflow</span>
+        <div className="bg-[#0d111a] border border-gray-800/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-400">
+              <ArrowDownRight className="w-4 h-4" />
+              <span>Total Inflow</span>
+            </div>
+            <p className="text-xl sm:text-2xl font-bold font-mono text-white mt-1">
+              ₹{totalIncome.toLocaleString('en-IN')}
+            </p>
           </div>
-          <p className="text-xl sm:text-2xl font-bold font-mono text-white mt-1">
-            ₹{totalIncome.toLocaleString('en-IN')}
-          </p>
+          {borrowedInflow > 0 ? (
+            <p className="text-[10px] text-gray-400 mt-2 pt-1.5 border-t border-gray-800/60 truncate">
+              Earned: <b className="text-emerald-400 font-mono">₹{earnedIncome.toLocaleString('en-IN')}</b> • Debt: <b className="text-rose-400 font-mono">₹{borrowedInflow.toLocaleString('en-IN')}</b>
+            </p>
+          ) : (
+            <p className="text-[10px] text-gray-500 mt-2 pt-1.5 border-t border-gray-800/60">
+              Real Earned Income
+            </p>
+          )}
         </div>
 
         {/* Total Outflow */}
-        <div className="bg-[#0d111a] border border-gray-800/80 rounded-2xl p-4 shadow-sm">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-rose-400">
-            <ArrowUpRight className="w-4 h-4" />
-            <span>Total Outflow</span>
+        <div className="bg-[#0d111a] border border-gray-800/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-rose-400">
+              <ArrowUpRight className="w-4 h-4" />
+              <span>Total Outflow</span>
+            </div>
+            <p className="text-xl sm:text-2xl font-bold font-mono text-white mt-1">
+              ₹{totalExpense.toLocaleString('en-IN')}
+            </p>
           </div>
-          <p className="text-xl sm:text-2xl font-bold font-mono text-white mt-1">
-            ₹{totalExpense.toLocaleString('en-IN')}
-          </p>
+          {moneyLentOut > 0 ? (
+            <p className="text-[10px] text-gray-400 mt-2 pt-1.5 border-t border-gray-800/60 truncate">
+              Spent: <b className="text-white font-mono">₹{consumptionExpense.toLocaleString('en-IN')}</b> • Lent: <b className="text-purple-400 font-mono">₹{moneyLentOut.toLocaleString('en-IN')}</b>
+            </p>
+          ) : (
+            <p className="text-[10px] text-gray-500 mt-2 pt-1.5 border-t border-gray-800/60">
+              Daily Life & Work Expenses
+            </p>
+          )}
         </div>
 
-        {/* Net Savings */}
-        <div className="col-span-2 sm:col-span-1 bg-[#0d111a] border border-gray-800/80 rounded-2xl p-4 shadow-sm">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-400">
-            <span>Net Cashflow</span>
+        {/* True Net Cashflow */}
+        <div className="col-span-2 sm:col-span-1 bg-[#0d111a] border border-gray-800/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between text-xs font-semibold text-gray-400">
+              <span>True Net Cashflow</span>
+              <span
+                className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+                  trueNetCashflow >= 0
+                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                    : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                }`}
+              >
+                {trueNetCashflow >= 0 ? 'Surplus' : 'Deficit'}
+              </span>
+            </div>
+            <p
+              className={`text-xl sm:text-2xl font-bold font-mono mt-1 ${
+                trueNetCashflow >= 0 ? 'text-emerald-400' : 'text-rose-400'
+              }`}
+            >
+              {trueNetCashflow >= 0 ? '+' : ''}₹{trueNetCashflow.toLocaleString('en-IN')}
+            </p>
           </div>
-          <p
-            className={`text-xl sm:text-2xl font-bold font-mono mt-1 ${
-              netSavings >= 0 ? 'text-emerald-400' : 'text-rose-400'
-            }`}
-          >
-            {netSavings >= 0 ? '+' : ''}₹{netSavings.toLocaleString('en-IN')}
-          </p>
+          <div className="text-[10px] text-gray-400 mt-2 pt-1.5 border-t border-gray-800/60 flex items-center justify-between flex-wrap gap-1">
+            <span>
+              {pendingEmiObligation > 0
+                ? `Includes ₹${pendingEmiObligation.toLocaleString('en-IN')} EMI (Ded. 2nd)`
+                : hasPaidEmiInPeriod
+                ? 'EMI Paid (Ded. 2nd)'
+                : 'After all debt & commitments'}
+            </span>
+            {borrowedInflow > 0 && (
+              <span className="text-rose-400 font-mono font-medium">(-₹{borrowedInflow.toLocaleString('en-IN')} debt)</span>
+            )}
+          </div>
         </div>
       </div>
 

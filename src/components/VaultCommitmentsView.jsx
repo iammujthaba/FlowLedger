@@ -18,7 +18,7 @@ export default function VaultCommitmentsView({ vault = {} }) {
   const usdtBalance = Number(vault.usdt_balance ?? 0);
   const emiData = vault.bajaj_emi || {
     monthlyAmount: 1750,
-    dueDay: 5,
+    dueDay: 2,
     totalMonths: 12,
     paidMonths: 0,
     startDate: '2026-11-01',
@@ -223,7 +223,7 @@ export default function VaultCommitmentsView({ vault = {} }) {
                   Bajaj Finance EMI
                 </h4>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Fixed monthly commitment • Due around 5th
+                  Fixed monthly commitment • Due on 2nd of each month
                 </p>
               </div>
             </div>

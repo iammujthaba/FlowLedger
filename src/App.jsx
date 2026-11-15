@@ -96,6 +96,8 @@ export default function App() {
               transactions={transactions}
               categories={categories}
               accounts={accounts}
+              loans={loans}
+              vault={vault}
               onEditTransaction={handleEditTransaction}
               onOpenAdjustBalances={() => setIsAdjustBalancesOpen(true)}
             />

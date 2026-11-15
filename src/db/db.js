@@ -127,12 +127,19 @@ export async function initializeDatabase() {
       key: 'bajaj_emi',
       value: {
         monthlyAmount: 1750,
-        dueDay: 5,
+        dueDay: 2,
         totalMonths: 12,
         paidMonths: 0,
         startDate: '2026-11-01',
         lender: 'Bajaj Finance',
       },
+      updatedAt: new Date().toISOString(),
+    });
+  } else if (emiConfig.value && emiConfig.value.dueDay !== 2) {
+    emiConfig.value.dueDay = 2;
+    await db.vault.put({
+      key: 'bajaj_emi',
+      value: emiConfig.value,
       updatedAt: new Date().toISOString(),
     });
   }
