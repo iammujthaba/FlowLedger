@@ -125,7 +125,7 @@ export default function App() {
           {activeTab === 'vault' && <VaultCommitmentsView vault={vault} />}
 
           {activeTab === 'insights' && (
-            <InsightsView transactions={transactions} categories={categories} />
+            <InsightsView transactions={transactions} categories={categories} vault={vault} />
           )}
         </main>
       </div>
