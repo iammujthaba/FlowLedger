@@ -15,7 +15,7 @@ import {
 export default function LoansView({ loans = [], accounts = [] }) {
   const accountsList = accounts.length > 0 ? accounts : DEFAULT_ACCOUNTS;
 
-  const [activeTab, setActiveTab] = useState('lent'); // 'lent' | 'borrowed'
+  const [activeTab, setActiveTab] = useState('borrowed'); // 'borrowed' | 'lent'
   const [showAddModal, setShowAddModal] = useState(false);
   const [settleLoan, setSettleLoan] = useState(null);
   const [repaymentAmount, setRepaymentAmount] = useState('');
@@ -25,8 +25,8 @@ export default function LoansView({ loans = [], accounts = [] }) {
 
   // Form states for adding loan
   const [personName, setPersonName] = useState('');
-  const [loanType, setLoanType] = useState('lent');
-  const [account, setAccount] = useState('kgb');
+  const [loanType, setLoanType] = useState('borrowed');
+  const [account, setAccount] = useState('sib');
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [dueDate, setDueDate] = useState('');
