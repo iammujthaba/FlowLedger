@@ -596,6 +596,34 @@ export default function LedgerView({
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        {/* True Net Cashflow */}
+        <div className="col-span-2 sm:col-span-1 bg-[#0d111a] border border-gray-800/80 rounded-2xl p-3.5 sm:p-4 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between text-xs font-semibold text-gray-400">
+              <span>True Net Cashflow</span>
+              <span
+                className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+                  trueNetCashflow >= 0
+                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                    : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                }`}
+              >
+                {trueNetCashflow >= 0 ? 'Surplus' : 'Deficit'}
+              </span>
+            </div>
+            <p
+              className={`text-xl sm:text-2xl font-bold font-mono mt-1 ${
+                trueNetCashflow >= 0 ? 'text-emerald-400' : 'text-rose-400'
+              }`}
+            >
+              {trueNetCashflow >= 0 ? '+' : ''}₹{trueNetCashflow.toLocaleString('en-IN')}
+            </p>
+          </div>
+          <div className="text-[11px] text-gray-400 mt-2 pt-1.5 border-t border-gray-800/60 leading-relaxed">
+            {cashflowInsight}
+          </div>
+        </div>
+
         {/* Total Inflow */}
         <div className="bg-[#0d111a] border border-gray-800/80 rounded-2xl p-3.5 sm:p-4 shadow-sm flex flex-col justify-between">
           <div>
@@ -659,34 +687,6 @@ export default function LedgerView({
               </div>
             </div>
           )}
-        </div>
-
-        {/* True Net Cashflow */}
-        <div className="col-span-2 sm:col-span-1 bg-[#0d111a] border border-gray-800/80 rounded-2xl p-3.5 sm:p-4 shadow-sm flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between text-xs font-semibold text-gray-400">
-              <span>True Net Cashflow</span>
-              <span
-                className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
-                  trueNetCashflow >= 0
-                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                    : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-                }`}
-              >
-                {trueNetCashflow >= 0 ? 'Surplus' : 'Deficit'}
-              </span>
-            </div>
-            <p
-              className={`text-xl sm:text-2xl font-bold font-mono mt-1 ${
-                trueNetCashflow >= 0 ? 'text-emerald-400' : 'text-rose-400'
-              }`}
-            >
-              {trueNetCashflow >= 0 ? '+' : ''}₹{trueNetCashflow.toLocaleString('en-IN')}
-            </p>
-          </div>
-          <div className="text-[11px] text-gray-400 mt-2 pt-1.5 border-t border-gray-800/60 leading-relaxed">
-            {cashflowInsight}
-          </div>
         </div>
       </div>
 
