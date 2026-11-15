@@ -6,7 +6,8 @@ import {
   RefreshCw,
   Download,
   HelpCircle,
-  Link2
+  Link2,
+  UploadCloud
 } from 'lucide-react';
 
 export default function SettingsModal({ isOpen, onClose, syncInfo, onTriggerSync }) {
@@ -14,6 +15,8 @@ export default function SettingsModal({ isOpen, onClose, syncInfo, onTriggerSync
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
+  const [isPushingAll, setIsPushingAll] = useState(false);
+  const [pushAllMsg, setPushAllMsg] = useState('');
 
   if (!isOpen) return null;
 
@@ -27,6 +30,25 @@ export default function SettingsModal({ isOpen, onClose, syncInfo, onTriggerSync
 
     if (scriptUrl.trim()) {
       onTriggerSync();
+    }
+  };
+
+  const handlePushAll = async () => {
+    if (!scriptUrl.trim()) return;
+    setIsPushingAll(true);
+    setPushAllMsg('');
+    try {
+      const res = await syncService.pushAllLocalData();
+      if (res.success) {
+        setPushAllMsg('✓ Successfully uploaded all local records to Google Sheet!');
+      } else {
+        setPushAllMsg('Failed to upload: ' + (res.error || res.message));
+      }
+    } catch (err) {
+      setPushAllMsg('Error uploading: ' + err.message);
+    } finally {
+      setIsPushingAll(false);
+      setTimeout(() => setPushAllMsg(''), 4000);
     }
   };
 
@@ -140,6 +162,23 @@ export default function SettingsModal({ isOpen, onClose, syncInfo, onTriggerSync
                 <span>Sync Now</span>
               </button>
             </div>
+
+            {/* Push all local data button */}
+            <button
+              type="button"
+              onClick={handlePushAll}
+              disabled={isPushingAll || !scriptUrl.trim()}
+              className="w-full py-2.5 px-3 rounded-xl text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center justify-center gap-2 transition-all"
+            >
+              <UploadCloud className={`w-4 h-4 ${isPushingAll ? 'animate-bounce' : ''}`} />
+              <span>{isPushingAll ? 'Uploading all records to Sheet...' : 'Upload All Local Records to Google Sheet'}</span>
+            </button>
+
+            {pushAllMsg && (
+              <p className="text-[11px] text-emerald-500 font-medium text-center">
+                {pushAllMsg}
+              </p>
+            )}
           </form>
 
           {syncInfo.lastSyncTime && (

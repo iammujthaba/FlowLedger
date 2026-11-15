@@ -126,6 +126,15 @@ function ensureSheets(ss) {
       sheet.appendRow(def.headers);
       sheet.getRange(1, 1, 1, def.headers.length).setFontWeight('bold').setBackground('#f3f4f6');
       sheet.setFrozenRows(1);
+    } else {
+      // Auto-migrate: check if any required headers are missing from row 1, and append them
+      const existingHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+      def.headers.forEach(h => {
+        if (existingHeaders.indexOf(h) === -1) {
+          const nextCol = sheet.getLastColumn() + 1;
+          sheet.getRange(1, nextCol).setValue(h).setFontWeight('bold').setBackground('#f3f4f6');
+        }
+      });
     }
   });
 }

@@ -66,8 +66,9 @@ class SyncService {
    * Run bidirectional sync
    * @param {Object} options
    * @param {boolean} options.forceFull - If true, pull complete data ignoring lastSyncTime
+   * @param {boolean} options.pushAll - If true, push all local transactions/loans/vault
    */
-  async sync({ forceFull = false } = {}) {
+  async sync({ forceFull = false, pushAll = false } = {}) {
     const url = this.getScriptUrl();
     if (!url) {
       this.setStatus('not_configured');
@@ -84,16 +85,69 @@ class SyncService {
     this.setStatus('syncing');
 
     try {
-      // 1. PUSH: Gather queued local items
+      // 1. PUSH: Gather queued local items + any unsynced local records
       const queueItems = await db.syncQueue.toArray();
       const txToPush = [];
       const loansToPush = [];
       const vaultToPush = [];
+      const pushedTxIds = new Set();
+      const pushedLoanIds = new Set();
 
       for (const item of queueItems) {
-        if (item.entity === 'transactions') txToPush.push(item.payload);
-        else if (item.entity === 'loans') loansToPush.push(item.payload);
-        else if (item.entity === 'vault') vaultToPush.push(item.payload);
+        if (item.entity === 'transactions') {
+          txToPush.push(item.payload);
+          pushedTxIds.add(item.payload.id);
+        } else if (item.entity === 'loans') {
+          loansToPush.push(item.payload);
+          pushedLoanIds.add(item.payload.id);
+        } else if (item.entity === 'vault') {
+          vaultToPush.push(item.payload);
+        }
+      }
+
+      if (pushAll) {
+        // Full local dump to cloud: upload every local transaction, loan, and vault entry
+        const allTx = await db.transactions.toArray();
+        allTx.forEach((tx) => {
+          if (!pushedTxIds.has(tx.id)) {
+            txToPush.push({ ...tx, isDeleted: false });
+            pushedTxIds.add(tx.id);
+          }
+        });
+
+        const allLoans = await db.loans.toArray();
+        allLoans.forEach((l) => {
+          if (!pushedLoanIds.has(l.id)) {
+            loansToPush.push({ ...l, isDeleted: false });
+            pushedLoanIds.add(l.id);
+          }
+        });
+
+        const allVault = await db.vault.toArray();
+        allVault.forEach((v) => {
+          vaultToPush.push({
+            key: v.key,
+            value: v.value,
+            updatedAt: v.updatedAt || new Date().toISOString(),
+          });
+        });
+      } else {
+        // Automatic sweep: pick up any local transactions/loans not marked 'synced'
+        const unsyncedTx = await db.transactions
+          .filter((tx) => tx.syncStatus !== 'synced' && !pushedTxIds.has(tx.id))
+          .toArray();
+        unsyncedTx.forEach((tx) => {
+          txToPush.push({ ...tx, isDeleted: false });
+          pushedTxIds.add(tx.id);
+        });
+
+        const unsyncedLoans = await db.loans
+          .filter((l) => l.syncStatus !== 'synced' && !pushedLoanIds.has(l.id))
+          .toArray();
+        unsyncedLoans.forEach((l) => {
+          loansToPush.push({ ...l, isDeleted: false });
+          pushedLoanIds.add(l.id);
+        });
       }
 
       if (txToPush.length > 0 || loansToPush.length > 0 || vaultToPush.length > 0) {
@@ -112,6 +166,10 @@ class SyncService {
         if (pushData.status === 'success') {
           // Clear processed queue items
           await db.syncQueue.clear();
+
+          // Mark local records as synced
+          await db.transactions.toCollection().modify({ syncStatus: 'synced' });
+          await db.loans.toCollection().modify({ syncStatus: 'synced' });
         }
       }
 
@@ -186,6 +244,13 @@ class SyncService {
     } finally {
       this.syncing = false;
     }
+  }
+
+  /**
+   * Force push all local data (transactions, loans, vault) to Google Sheets.
+   */
+  async pushAllLocalData() {
+    return this.sync({ forceFull: true, pushAll: true });
   }
 }
 
