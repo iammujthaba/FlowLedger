@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { db, initializeDatabase, DEFAULT_ACCOUNTS } from './db/db';
 import { syncService } from './services/syncService';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -36,9 +36,9 @@ export default function App() {
     initializeDatabase().catch((err) => console.error('Database init error:', err));
     const unsubscribe = syncService.subscribe((info) => setSyncInfo(info));
 
-    // Initial background sync check if configured
+    // Initial background sync check: force full pull to ensure bank balances & full vault state are up to date
     if (navigator.onLine && syncService.getScriptUrl()) {
-      syncService.sync();
+      syncService.sync({ forceFull: true });
     }
 
     return () => unsubscribe();
@@ -56,7 +56,24 @@ export default function App() {
     return acc;
   }, {});
 
-  const accounts = Array.isArray(vault.bank_accounts) ? vault.bank_accounts : DEFAULT_ACCOUNTS;
+  // Robust parsing of bank_accounts from vault
+  const accounts = useMemo(() => {
+    let raw = vault.bank_accounts;
+    if (typeof raw === 'string') {
+      try {
+        raw = JSON.parse(raw);
+      } catch (err) {
+        console.error('Failed to parse bank_accounts from vault:', err);
+      }
+    }
+    if (Array.isArray(raw) && raw.length > 0) {
+      return raw.map((acc) => ({
+        ...acc,
+        balance: Number(acc.balance) || 0,
+      }));
+    }
+    return DEFAULT_ACCOUNTS;
+  }, [vault.bank_accounts]);
 
   const handleEditTransaction = (tx) => {
     setEditingTransaction(tx);
@@ -68,8 +85,8 @@ export default function App() {
     setEditingTransaction(null);
   };
 
-  const handleTriggerSync = () => {
-    syncService.sync();
+  const handleTriggerSync = (forceFull = false) => {
+    syncService.sync({ forceFull });
   };
 
   return (
@@ -126,11 +143,14 @@ export default function App() {
       )}
 
       {/* Adjust Balances / Account Shuffle Modal */}
-      <AdjustBalancesModal
-        isOpen={isAdjustBalancesOpen}
-        onClose={() => setIsAdjustBalancesOpen(false)}
-        accounts={accounts}
-      />
+      {isAdjustBalancesOpen && (
+        <AdjustBalancesModal
+          key={isAdjustBalancesOpen ? 'adjust-modal-open' : 'adjust-modal-closed'}
+          isOpen={isAdjustBalancesOpen}
+          onClose={() => setIsAdjustBalancesOpen(false)}
+          accounts={accounts}
+        />
+      )}
 
       {/* Settings Modal */}
       {isSettingsOpen && (

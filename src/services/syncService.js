@@ -64,8 +64,10 @@ class SyncService {
 
   /**
    * Run bidirectional sync
+   * @param {Object} options
+   * @param {boolean} options.forceFull - If true, pull complete data ignoring lastSyncTime
    */
-  async sync() {
+  async sync({ forceFull = false } = {}) {
     const url = this.getScriptUrl();
     if (!url) {
       this.setStatus('not_configured');
@@ -113,8 +115,11 @@ class SyncService {
         }
       }
 
-      // 2. PULL: Fetch any changes since last sync
-      const pullUrl = `${url}?action=pull${this.lastSyncTime ? `&since=${encodeURIComponent(this.lastSyncTime)}` : ''}`;
+      // 2. PULL: Fetch any changes since last sync (or complete pull if forceFull)
+      const pullUrl = (this.lastSyncTime && !forceFull)
+        ? `${url}?action=pull&since=${encodeURIComponent(this.lastSyncTime)}`
+        : `${url}?action=pull`;
+
       const pullRes = await fetch(pullUrl);
       const pullData = await pullRes.json();
 
@@ -153,13 +158,17 @@ class SyncService {
           for (const v of pullData.vault) {
             let val = v.value;
             try {
-              if (typeof val === 'string' && (val.startsWith('{') || val.startsWith('['))) {
+              if (typeof val === 'string' && (val.trim().startsWith('{') || val.trim().startsWith('['))) {
                 val = JSON.parse(val);
               }
-            } catch {
-              // keep as string
+            } catch (err) {
+              console.warn('[SyncService] Vault parse error for key:', v.key, err);
             }
-            await db.vault.put({ key: v.key, value: val, updatedAt: v.updatedAt });
+            await db.vault.put({
+              key: v.key,
+              value: val,
+              updatedAt: v.updatedAt || new Date().toISOString()
+            });
           }
         }
 

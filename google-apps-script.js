@@ -29,7 +29,8 @@ function doGet(e) {
   if (action === 'pull') {
     const transactions = getSheetData(ss.getSheetByName('Transactions'), since);
     const loans = getSheetData(ss.getSheetByName('Loans'), since);
-    const vault = getSheetData(ss.getSheetByName('Vault'), since);
+    // Vault holds essential configs & bank balances (only 3-4 rows). Always return full state to prevent stale balances.
+    const vault = getSheetData(ss.getSheetByName('Vault'), '');
 
     return jsonResponse({
       status: 'success',

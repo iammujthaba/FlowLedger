@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { db } from '../db/db';
 import { syncService } from '../services/syncService';
-import { X, Check, Landmark, Wallet, CreditCard, Star } from 'lucide-react';
+import { X, Check, Landmark, Wallet, CreditCard, Star, RefreshCw } from 'lucide-react';
 
 export default function AdjustBalancesModal({ isOpen, onClose, accounts = [] }) {
   const [draftBalances, setDraftBalances] = useState(() => {
@@ -18,8 +18,36 @@ export default function AdjustBalancesModal({ isOpen, onClose, accounts = [] }) 
   });
 
   const [isSaving, setIsSaving] = useState(false);
+  const [isPulling, setIsPulling] = useState(false);
 
   if (!isOpen) return null;
+
+  const handlePullFromSheet = async () => {
+    setIsPulling(true);
+    try {
+      await syncService.sync({ forceFull: true });
+      const vaultRow = await db.vault.get('bank_accounts');
+      if (vaultRow && vaultRow.value) {
+        let list = vaultRow.value;
+        if (typeof list === 'string') {
+          list = JSON.parse(list);
+        }
+        if (Array.isArray(list) && list.length > 0) {
+          const map = {};
+          list.forEach((acc) => {
+            map[acc.id] = String(acc.balance ?? 0);
+          });
+          setDraftBalances(map);
+          const def = list.find((a) => a.isDefault);
+          if (def) setDefaultAccId(def.id);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to pull balances from sheet:', err);
+    } finally {
+      setIsPulling(false);
+    }
+  };
 
   const handleBalanceChange = (accId, val) => {
     setDraftBalances((prev) => ({
@@ -87,12 +115,24 @@ export default function AdjustBalancesModal({ isOpen, onClose, accounts = [] }) 
               Adjust to match your real bank balances
             </p>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-full text-gray-400 hover:text-white"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={handlePullFromSheet}
+              disabled={isPulling}
+              title="Pull latest balances directly from Google Sheet"
+              className="py-1 px-2.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition-all flex items-center gap-1.5 text-xs font-semibold active:scale-95"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isPulling ? 'animate-spin' : ''}`} />
+              <span>Pull Sheet</span>
+            </button>
+            <button
+              onClick={onClose}
+              className="p-1 rounded-full text-gray-400 hover:text-white"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Form Body */}
