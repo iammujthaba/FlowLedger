@@ -942,14 +942,14 @@ export default function LedgerView({
                   <span className="text-xs font-bold text-gray-400 uppercase tracking-wider truncate mr-2">
                     {formatDateHeader(dateKey)}
                   </span>
-                  <div className="flex items-center gap-1.5 font-mono shrink-0 text-xs">
+                  <div className="flex items-center gap-1.5 font-mono shrink-0 text-xs text-gray-400">
                     {dayInflow > 0 && (
-                      <span className="text-emerald-400 font-bold">
+                      <span className="font-medium">
                         +₹{dayInflow.toLocaleString('en-IN')}
                       </span>
                     )}
                     {dayOutflow > 0 && (
-                      <span className="text-rose-400 font-bold">
+                      <span className="font-medium">
                         -₹{dayOutflow.toLocaleString('en-IN')}
                       </span>
                     )}
