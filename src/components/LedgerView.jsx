@@ -90,8 +90,8 @@ export default function LedgerView({
       const end = new Date(start);
       end.setDate(end.getDate() + 6);
 
-      const sStr = start.toISOString().split('T')[0];
-      const eStr = end.toISOString().split('T')[0];
+      const sStr = toIsoDate(start);
+      const eStr = toIsoDate(end);
       const l = `${start.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} – ${end.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`;
       return { startDateStr: sStr, endDateStr: eStr, label: l };
     }

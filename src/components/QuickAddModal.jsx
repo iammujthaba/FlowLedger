@@ -4,6 +4,7 @@ import { syncService } from '../services/syncService';
 import CategoryIcon from './CategoryIcon';
 import { X, Check, User, Briefcase, PlusCircle, MinusCircle } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { toIsoDate, getTodayIso, getYesterdayIso } from '../utils/dateUtils';
 
 // Contextual smart default bank account based on user preferences:
 // 1. Work-related expense -> Punjab National Bank ('pnb')
@@ -34,7 +35,7 @@ export default function QuickAddModal({
     return getContextualAccount(initialT, initialS);
   });
   const [amount, setAmount] = useState(() => (editTransaction ? String(editTransaction.amount) : ''));
-  const [date, setDate] = useState(() => editTransaction?.date || new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(() => (editTransaction?.date ? toIsoDate(editTransaction.date) : getTodayIso()));
   const [category, setCategory] = useState(() => editTransaction?.category || '');
   const [note, setNote] = useState(() => editTransaction?.note || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -49,10 +50,8 @@ export default function QuickAddModal({
 
   if (!isOpen) return null;
 
-  const todayStr = new Date().toISOString().split('T')[0];
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayStr = yesterday.toISOString().split('T')[0];
+  const todayStr = getTodayIso();
+  const yesterdayStr = getYesterdayIso();
 
   const effectiveCategory = category || (filteredCategories.length > 0 ? filteredCategories[0].name : '');
   const activeAccountId = account || getContextualAccount(type, sphere);

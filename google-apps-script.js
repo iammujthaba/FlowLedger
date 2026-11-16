@@ -146,11 +146,26 @@ function getSheetData(sheet, since) {
   const headers = data[0];
   const rows = [];
   const sinceDate = since ? new Date(since) : null;
+  const ss = sheet.getParent();
+  const tz = ss.getSpreadsheetTimeZone();
 
   for (let i = 1; i < data.length; i++) {
     const row = {};
     for (let j = 0; j < headers.length; j++) {
-      row[headers[j]] = data[i][j];
+      let val = data[i][j];
+      const header = headers[j];
+
+      // Convert Date objects to pure yyyy-MM-dd strings in the spreadsheet's timezone
+      // This prevents UTC timezone shifts when serialized to JSON
+      if (Object.prototype.toString.call(val) === '[object Date]' || val instanceof Date) {
+        if (header === 'date' || header === 'dueDate') {
+          val = Utilities.formatDate(val, tz, 'yyyy-MM-dd');
+        } else if (header === 'updatedAt') {
+          val = val.toISOString();
+        }
+      }
+
+      row[header] = val;
     }
 
     if (sinceDate && row.updatedAt) {

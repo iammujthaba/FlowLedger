@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { db, DEFAULT_ACCOUNTS, adjustAccountBalance } from '../db/db';
 import { syncService } from '../services/syncService';
-import { parseAnyDate } from '../utils/dateUtils';
+import { parseAnyDate, getTodayIso } from '../utils/dateUtils';
 import {
   Users,
   Plus,
@@ -20,7 +20,7 @@ export default function LoansView({ loans = [], accounts = [] }) {
   const [settleLoan, setSettleLoan] = useState(null);
   const [repaymentAmount, setRepaymentAmount] = useState('');
   const [settleAccount, setSettleAccount] = useState('sib');
-  const [settleDate, setSettleDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [settleDate, setSettleDate] = useState(() => getTodayIso());
   const [settleNote, setSettleNote] = useState('');
 
   // Form states for adding loan
@@ -28,7 +28,7 @@ export default function LoansView({ loans = [], accounts = [] }) {
   const [loanType, setLoanType] = useState('borrowed');
   const [account, setAccount] = useState('sib');
   const [amount, setAmount] = useState('');
-  const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(() => getTodayIso());
   const [dueDate, setDueDate] = useState('');
   const [notes, setNotes] = useState('');
 
@@ -90,7 +90,7 @@ export default function LoansView({ loans = [], accounts = [] }) {
         account: activeAccount,
         amount: parsedAmount,
         remainingAmount: parsedAmount,
-        date: date || new Date().toISOString().split('T')[0],
+        date: date || getTodayIso(),
         dueDate: dueDate || '',
         status: 'pending',
         notes: notes.trim(),
@@ -114,7 +114,7 @@ export default function LoansView({ loans = [], accounts = [] }) {
       const txRecord = {
         id: txId,
         relatedLoanId: id,
-        date: date || new Date().toISOString().split('T')[0],
+        date: date || getTodayIso(),
         sphere: 'personal',
         type: isLent ? 'expense' : 'income',
         account: activeAccount,
@@ -181,7 +181,7 @@ export default function LoansView({ loans = [], accounts = [] }) {
       const txRecord = {
         id: settleTxId,
         relatedLoanId: settleLoan.id,
-        date: settleDate || new Date().toISOString().split('T')[0],
+        date: settleDate || getTodayIso(),
         sphere: 'personal',
         type: isLent ? 'income' : 'expense',
         account: activeSettleAccount,
@@ -426,7 +426,7 @@ export default function LoansView({ loans = [], accounts = [] }) {
                         setSettleLoan(loan);
                         setRepaymentAmount(String(remaining));
                         setSettleAccount(loan.type === 'lent' ? 'sib' : 'kgb');
-                        setSettleDate(new Date().toISOString().split('T')[0]);
+                        setSettleDate(getTodayIso());
                         setSettleNote('');
                       }}
                       className="py-1 px-3 rounded-lg text-xs font-semibold bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500 hover:text-white border border-emerald-500/20 transition-all flex items-center gap-1.5"

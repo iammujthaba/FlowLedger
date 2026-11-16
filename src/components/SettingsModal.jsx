@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { syncService } from '../services/syncService';
 import { db } from '../db/db';
+import { getTodayIso } from '../utils/dateUtils';
 import {
   X,
   RefreshCw,
@@ -72,7 +73,7 @@ export default function SettingsModal({ isOpen, onClose, syncInfo, onTriggerSync
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `flowledger_backup_${new Date().toISOString().split('T')[0]}.json`;
+      a.download = `flowledger_backup_${getTodayIso()}.json`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {

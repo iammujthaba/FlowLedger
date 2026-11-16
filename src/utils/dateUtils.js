@@ -20,21 +20,28 @@ export function parseAnyDate(val) {
     return null;
   }
 
-  // 1. Check YYYY-MM-DD or YYYY/MM/DD
-  const ymd = str.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+  // 1. If it has an ISO time component (contains 'T' or a colon with time),
+  // parse with Date constructor so browser converts UTC to user's local timezone (e.g. IST)
+  if (str.includes('T') || (str.includes(':') && !str.match(/^(\d{1,2}):(\d{1,2})$/))) {
+    const d = new Date(str);
+    if (!isNaN(d.getTime())) return d;
+  }
+
+  // 2. Pure date string: YYYY-MM-DD or YYYY/MM/DD (exact match, no time component)
+  const ymd = str.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
   if (ymd) {
     const d = new Date(parseInt(ymd[1], 10), parseInt(ymd[2], 10) - 1, parseInt(ymd[3], 10));
     if (!isNaN(d.getTime())) return d;
   }
 
-  // 2. Check DD-MM-YYYY or DD/MM/YYYY or DD.MM.YYYY
-  const dmy = str.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/);
+  // 3. Pure date string: DD-MM-YYYY or DD/MM/YYYY or DD.MM.YYYY (exact match)
+  const dmy = str.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
   if (dmy) {
     const d = new Date(parseInt(dmy[3], 10), parseInt(dmy[2], 10) - 1, parseInt(dmy[1], 10));
     if (!isNaN(d.getTime())) return d;
   }
 
-  // 3. Fallback to standard Date parsing
+  // 4. Fallback to standard Date parsing
   const fallback = new Date(str);
   if (!isNaN(fallback.getTime())) return fallback;
 
@@ -49,6 +56,23 @@ export function toIsoDate(val, fallbackVal = '') {
   if (!d) {
     d = new Date();
   }
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export function getTodayIso() {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export function getYesterdayIso() {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');

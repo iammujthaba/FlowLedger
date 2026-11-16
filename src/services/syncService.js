@@ -204,6 +204,8 @@ class SyncService {
             } else {
               await db.loans.put({
                 ...loan,
+                date: toIsoDate(loan.date),
+                dueDate: loan.dueDate ? toIsoDate(loan.dueDate) : '',
                 amount: Number(loan.amount),
                 remainingAmount: Number(loan.remainingAmount),
                 syncStatus: 'synced',
